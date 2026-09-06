@@ -1,0 +1,36 @@
+[project]
+name = "pipecat-ios"
+version = "0.1.0"
+description = "An iOS voice agent with an embedded Pipecat Python pipeline"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "build>=1.2,<2",
+    "docstring-parser>=0.16,<1",
+    "loguru~=0.7.3",
+    "packaging>=25",
+    "pydantic>=2.10.6,<3",
+    "pytest>=8,<10",
+    "pytest-asyncio>=1,<2",
+    "ruff>=0.12,<1",
+    "setuptools>=64",
+    "setuptools-scm>=8",
+    "typing-extensions>=4.12",
+    "websockets>=13.1",
+]
+native = ["cmake>=3.28,<4", "maturin>=1.9,<2", "pip>=25"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src/python", "pipecat/src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["models", "pipecat", ".build", "Vendor"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]

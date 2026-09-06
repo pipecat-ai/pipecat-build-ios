@@ -1,0 +1,17 @@
+.DS_Store
+.build/
+.local/
+.venv/
+Vendor/
+build/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.xcuserstate
+xcuserdata/
+*.xcarchive
+*.ipa
+/models/*
+!/models/README.txt
+native/phonon-ffi/target/

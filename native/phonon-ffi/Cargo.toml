@@ -1,0 +1,17 @@
+[package]
+name = "phonon-ffi"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "phonon_ffi"
+crate-type = ["staticlib"]
+
+[dependencies]
+gphonon = { path = "../../models/phonon" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
