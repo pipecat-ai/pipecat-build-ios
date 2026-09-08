@@ -8,7 +8,6 @@ struct PipecatVoiceApp: App {
     var body: some Scene {
         WindowGroup {
             ConversationView(model: model)
-                .preferredColorScheme(.light)
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { model.stop() }
                     if phase == .active { model.availability = AppleLanguageModel.unavailableReason }

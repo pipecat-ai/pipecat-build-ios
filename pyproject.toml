@@ -24,7 +24,7 @@ native = ["cmake>=3.28,<4", "maturin>=1.9,<2", "pip>=25"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src/python", "pipecat/src"]
+pythonpath = ["src/python", "pipecat/src", "scripts"]
 asyncio_mode = "auto"
 
 [tool.ruff]

@@ -33,7 +33,7 @@ def test_mobile_metadata_omits_desktop_dependencies():
     assert DESKTOP <= active
 
 
-def test_real_pipeline_imports_without_desktop_modules():
+def test_real_pipeline_completes_a_turn_without_desktop_modules():
     code = """
 import importlib.abc, sys
 class NoDesktop(importlib.abc.MetaPathFinder):
@@ -42,19 +42,76 @@ class NoDesktop(importlib.abc.MetaPathFinder):
             raise RuntimeError('Desktop module imported: ' + fullname)
 sys.meta_path.insert(0, NoDesktop())
 sys.path.insert(0, 'src/python')
-from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.worker import PipelineWorker
+sys.path.insert(0, 'pipecat/src')
 from pipecat.workers.runner import WorkerRunner
-from pipecat.frames.frames import TranscriptionFrame
-assert TranscriptionFrame('Hello', 'user', 'now').text == 'Hello'
-from mobile_app.bot import VoiceAgent
-import asyncio
-async def check_aggregation():
-    bot = VoiceAgent(lambda event: None, sentence_boundary_matcher=lambda text: 0)
-    pieces = [part async for part in bot.text_aggregator.aggregate('A complete sentence. Next')]
-    assert not pieces
-    assert (await bot.text_aggregator.flush()).text == 'A complete sentence. Next'
-asyncio.run(check_aggregation())
+from mobile_app.bot import create_bot
+from pipecat.services.apple.bridge import AppleNativeBridge
+import asyncio, re
+
+async def check_native_turn():
+    events = asyncio.Queue()
+    seen = []
+    def emit(event):
+        seen.append(event)
+        events.put_nowait(event)
+    async def wait(predicate):
+        async with asyncio.timeout(5):
+            while True:
+                event = await events.get()
+                assert event.get('type') != 'error', event
+                if predicate(event):
+                    return event
+    def boundary(text):
+        match = re.search(r'[.!?](?=\\s+\\S)', text)
+        return match.end() if match else 0
+    bridge = AppleNativeBridge(emit)
+    worker = create_bot(bridge, sentence_boundary_matcher=boundary)
+    runner = WorkerRunner(handle_sigint=False, handle_sigterm=False)
+    await runner.add_workers(worker)
+    task = asyncio.create_task(runner.run())
+    try:
+        await asyncio.wait_for(bridge.ready.wait(), 5)
+        await bridge.receive({'type': 'start', 'session': 'mobile-imports'})
+        await bridge.receive({'type': 'vad', 'confidence': .95, 'volume': 1,
+                              'time': .1, 'session': 'mobile-imports'})
+        await wait(lambda e: e.get('message', {}).get('type') == 'user-started-speaking')
+        for index in range(6):
+            await bridge.receive({'type': 'vad', 'confidence': 0, 'volume': 1,
+                                  'time': .2 + index * .1, 'session': 'mobile-imports'})
+        endpoint = await wait(lambda e: e.get('operation') == 'finalize_asr')
+        await bridge.receive({'type': 'transcription', 'text': 'Say hello',
+                              'final': True, 'start': .1, 'end': .7,
+                              'session': 'mobile-imports'})
+        await bridge.receive({'type': 'result', 'request': endpoint['request'], 'done': True})
+        generate = await wait(lambda e: e.get('operation') == 'generate')
+        assert generate['prompt'] == 'Say hello'
+        await bridge.receive({'type': 'result', 'request': generate['request'],
+                              'delta': 'Hello there. Nice to meet you.'})
+        await bridge.receive({'type': 'result', 'request': generate['request'], 'done': True})
+        for sentence in ['Hello there.', 'Nice to meet you.']:
+            speak = await wait(lambda e: e.get('operation') == 'speak')
+            assert speak['text'] == sentence
+            await bridge.receive({'type': 'playback', 'request': speak['request'],
+                                  'speaking': True, 'session': 'mobile-imports'})
+            await bridge.receive({'type': 'playback', 'request': speak['request'],
+                                  'speaking': False, 'session': 'mobile-imports'})
+            await bridge.receive({'type': 'result', 'request': speak['request'], 'done': True})
+        await wait(lambda e: e.get('state') == 'listening')
+        assert bridge.context.messages == [
+            {'role': 'user', 'content': 'Say hello'},
+            {'role': 'assistant', 'content': 'Hello there. Nice to meet you.'},
+        ], bridge.context.messages
+        types = {event.get('message', {}).get('type') for event in seen}
+        assert {'user-started-speaking', 'user-stopped-speaking',
+                'bot-started-speaking', 'bot-stopped-speaking'} <= types, types
+    finally:
+        await bridge.receive({'type': 'stop', 'session': 'mobile-imports'})
+        await runner.cancel()
+        await asyncio.wait_for(task, 5)
+
+asyncio.run(check_native_turn())
 """
-    result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=20
+    )
     assert result.returncode == 0, result.stderr

@@ -1,63 +1,168 @@
 # Validation
 
-Validated on September 6, 2026 with Xcode 26.6 and the iOS 26.5 SDK/runtime.
+## September 8, 2026: voice conversation interface
+
+The conversation screen now uses independent user and bot audio levels. Native
+capture drives the microphone bars, including during bot playback; playback
+drives the orb. Mute clears the input meter, and cancellation/end clears playback
+levels. The orb eases to rest after bot playback and pauses while the app is
+inactive. Reduce Motion keeps it still.
+
+The refined orb uses a bundled Metal shader with volumetric wisps and soft edges,
+scheduled at up to 60 frames per second. Its analytic attack/release envelope
+preserves the shape and clock across audio chunks, interruption, and resumed
+playback. The Simulator app build and iPhone shader compilation passed. A local
+motion probe checked continuous retargeting, eased attack/release, frozen idle,
+and resuming without a phase jump. The three existing project generation tests
+passed after adding Metal sources to the generator. GPU renders and Simulator
+previews are in `.build/orb-review/`; device frame pacing has not been measured.
+
+The audio-reactive refinement adds a flowing circular aura with gain-driven
+expansion, ribbon separation, brightness, and motion speed. `PCMPlayer` now
+schedules contiguous 20 ms windows and emits each level after playback, replacing
+the average reported when an entire synthesis chunk was queued. A fixed decibel
+range retains gain differences. The orb follows native playback activity directly
+and uses a 45 ms attack / 180 ms release envelope.
+
+`tests/test_audio_playback.py` exercises the actual player with an offline
+AVAudioEngine: sample continuity (including a short final window), no premature
+level on enqueue, quiet/loud/silent sections within one chunk, completion reset,
+interruption, restart, and cancelled drain. Together with transcript and pipeline
+regressions, 24 tests passed. Offline rendering uses `.dataRendered` because it has
+no audio device; normal playback retains `.dataPlayedBack` and its output latency.
+The Simulator preview in `.build/aura-review/aura-preview.mp4` uses the production
+views and player with recorded PocketTTS speech at 0.25× and 1.5× gain. It delivered
+328 meter updates with a median non-batched interval of approximately 21 ms; the
+median nonzero level rose from 0.29 to 0.67. It uses a playback-only review engine,
+so it does not validate microphone echo cancellation. iPhone shader compilation
+and the motion continuity probe also passed.
+
+Final user bubbles are blue, live user hypotheses are pale blue, composing bot
+replies are violet, and final bot replies use an adaptive neutral surface. Live
+bubbles have dashed outlines and text labels so color is not their only cue.
+Amber, single-line markers distinguish user interruptions from conversations
+ended during a reply, including interruption before the first generated token.
+ASR hypotheses revise the current turn's bubble without changing committed text.
 
 | Check | Result |
 | --- | --- |
-| iPhone Release build, arm64, signing disabled | Passed |
-| iPhone Debug build, arm64, development signing | Passed with the existing Xcode signing team |
-| Signed app installation | Passed on the connected iPhone 16 Pro |
-| Physical-device app launch and embedded pipeline | `PIPECAT_PYTHON_READY` observed on iPhone 16 Pro |
-| Simulator Debug build, arm64 | Passed |
-| Simulator app install and launch | Passed on iPhone 17 Pro / iOS 26.5 |
-| Pipecat artwork | Header and voice indicator visually inspected; vector assets and light/dark 1024px icons compiled into both builds |
-| Manual key entry builds | Debug iPhone and simulator builds passed; no legacy credential resource or automatic-key loader remains in either app |
-| Fresh-install key entry | `PHONON_VOICE_KEY_MISSING` and `PIPECAT_PYTHON_READY` observed; UI shows **Set up voice** |
-| Model ignore rules | Existing model assets, source, future model directories, and hidden files are ignored; `models/README.txt` is includable |
-| Embedded CPython 3.13.14 starts real Pipecat pipeline | `PIPECAT_PYTHON_READY` observed |
-| Phonon GGUF, SentencePiece tokenizer, Marlowe voice load | `PHONON_MODEL_LOADED` observed |
-| Phonon key authentication | HTTP 200 from the supplied runtime's session endpoint |
-| Native Phonon synthesis, iOS simulator arm64 library | 103,680 finite, non-silent samples; 4.32 seconds at 24 kHz |
-| Mobile orchestration, native sentence boundaries, and dependency tests | 15 passed |
-| Existing Pipecat audio utils, volume, pipeline, and LLM context tests | 71 passed |
-| Existing Pipecat sentence, pattern-pair, skip-tag aggregation, and string tests | 72 passed |
-| Python lint, formatting, byte compilation | Passed |
-| Pipecat and app lockfile consistency | Passed; Pipecat package versions unchanged |
+| Full Simulator Debug build with cached packages and normal signing | Passed; no Swift compiler warnings |
+| Focused pipeline and native transcript tests | 23 passed; existing Pipecat deprecation warning only |
+| New Python test lint and formatting | Passed |
+| Actual app startup in iPhone 17 Pro Simulator, iOS 26.5 | Ready screen rendered successfully |
+| Production SwiftUI views with local UI fixtures | Speaking, listening, connecting, muted, light/dark appearance, and accessibility-size layouts inspected |
+| Interruption marker at accessibility text size 3 | Single line; adjacent divider lines yield space |
+| Live transcript and controls | Latest bubble clears the dock; microphone has separate green/red states and a connecting spinner |
+| Scrolling during streamed text updates | Reading position retained after scrolling back; Latest returns to the bottom |
+| Accessibility tree | Speaker, live/final state, interruption, microphone state, copy action, and control labels exposed |
 
-The branded simulator screen is `.build/pipecat-branded-screen.png`. Build logs
-for that version are `.build/xcode-branding-simulator.log` and
-`.build/xcode-branding-device.log`.
-The subsequent builds with automatic key setup removed are recorded in
-`.build/xcode-manual-key-simulator.log` and `.build/xcode-manual-key-device.log`.
-The fresh-install screen is `.build/manual-key-setup-screen.png`.
-The earlier core regression checks and the new text aggregation checks are
-separate runs. The latter use desktop NLTK only in the test environment; the app
-tests reject NLTK imports and exercise the actual native `NLTokenizer` bridge.
+Screenshots and logs are in `.build/voice-ui-review/`. UI fixtures compile the
+production views with an in-memory model and do not start audio or Python; they
+verify layout and UI interaction, not acoustic behavior. The actual app was built
+and launched separately. On an iPhone, verify that microphone input never moves
+the bot orb, bot output never drives the microphone bars, and spoken interruption
+cuts playback and leaves its inline event. Hardware audio, haptics, and VoiceOver
+spoken navigation still need a device pass.
 
-Normal Xcode simulator signing is required for the simulated application
-identifier used by Keychain. A build with `CODE_SIGNING_ALLOWED=NO` could not save
-keys; rebuilding with normal signing restored Keychain access.
+## September 8, 2026: native VAD and continuous ASR
 
-The model-loading check uses an inert test credential only to validate local
-assets. It does not call `TtsModel.run`, generate audio, or contact Gradium.
+The following native checks cover the new Apple audio/VAD binding. They used
+Xcode 26.6 and the installed iOS/macOS 26.5 SDKs. Earlier application checks are
+recorded separately below; they do not establish device behavior for spoken
+interruptions.
 
-A separate authenticated synthesis check used the user-supplied key and the
-existing iOS simulator Phonon static library through its C interface. It generated
-"Hello! This is Phonon speaking from the bundled model." with Marlowe. The first
-audio arrived after 0.221 seconds and synthesis finished in 1.546 seconds. These
-are simulator measurements on the Mac, not iPhone performance measurements. The
-output is `.build/phonon-key-test.wav`. That synthesis test passed the credential
-in memory without logging it. Build-time key setup has since been removed: the
-app reads keys only from its Keychain, and users enter them in Voice settings.
-The local credential file and configuration script were deleted. The bundling
-script removes the legacy credential resource from reused build output for all
-configurations. The five tests for automatic development-key setup were removed
-with that feature; the remaining 15 app tests pass.
+| Check | Result |
+| --- | --- |
+| `VoiceAudioEngine`, `AppleSpeechRecognizer`, and `PCMPlayer` iOS simulator SDK typecheck | Passed with the project's Swift 5 and targeted concurrency settings; no warnings |
+| Apple SpeechDetector paired with a progressive transcriber on a real speech fixture | Transcriber produced text; detector produced zero activity events |
+| Apple SoundAnalysis `.version1` speech classification | Passed with 0.5-second windows and 0.1-second hops; speech confidence reached approximately 0.7–0.91 on the fixture |
+| Actual native conversion, classification, and ASR handoff implementation | Two successive 4.32-second speech clips each produced both final sentences |
+| Audio retained during ASR replacement | Passed; second clip's timestamps began at 4.3193125 seconds, preserving the continuous audio clock |
+| Old ASR result stream drained before endpoint acknowledgment | Passed; 66 ms measured on this Mac for the fixture |
 
-A real spoken conversation, physical-device inference latency, audio routing,
-microphone behavior, and Foundation Models responses still need testing on an
-eligible physical device. The earlier signed app launched on the iPhone and its
-embedded Python startup was verified. The latest build with manual key entry
-installed successfully, but launching it was blocked because the phone was
-locked. Its fresh-install setup and Python startup were verified in the simulator.
-App Store distribution was not performed.
+The native probes are `.build/probe_speech_detector.swift`,
+`.build/probe_sound_analysis.swift`, and `.build/probe_native_handoff.swift`.
+They use a locally generated speech fixture; no new synthesis was needed. Access to the host's speech model service
+required running the speech probes outside the filesystem sandbox. The handoff
+probe uses the actual `SpeechAudioInput` implementation from the application.
+
+The SpeechDetector result matches Apple's
+[documented empty stream](https://developer.apple.com/documentation/speech/speechdetector/results),
+despite the SDK exposing `speechDetected`. The application uses SoundAnalysis
+classification instead. Its 500 ms analysis window and Pipecat's stop debounce
+affect responsiveness; the measured ASR drain time is only one part of endpoint
+latency and is not an iPhone performance result.
+
+Speakerphone echo rejection, noisy-room false starts, headset/Bluetooth routes,
+and speech-to-interruption latency need testing on a physical iPhone. Useful
+device checks are speaking over a long reply, pausing and resuming while ASR is
+finalizing, muting during playback, and starting a new conversation immediately
+after stopping. Confirm that the activity display records user and bot starts
+and stops, that the next utterance retains its first and last words, and that an
+interrupted assistant sentence is omitted from later context. Simulator startup
+and deterministic Python host tests cannot establish these acoustic properties.
+
+## PocketTTS setup and native host integration
+
+The PocketTTS fetcher, checksum manifest, generic Python TTS service, Swift
+adapters, provider settings, build gate, and model packaging are implemented.
+The regenerated project preserves the existing signing team. The following
+checks use the completed PocketTTS integration together with the VAD, continuous
+ASR, interruption, and playback acknowledgment changes.
+
+The model setup tests exercise pinned URLs, verified-file reuse, corruption
+repair, interrupted transfers, checksum failure, retries, missing assets, public
+and private asset selection, and reproducible project generation. Project tests
+run in temporary directories so they do not modify the working client project.
+
+| Check | Result |
+| --- | --- |
+| Complete pinned English int8 download | 48 files, 454,245,751 bytes; SHA-256 verification passed |
+| Repeated fetch | 0 downloaded, all 48 files reused |
+| Offline asset verification | Passed |
+| Public model packaging with actual assets | Passed; all declared files verified in the output bundle |
+| Root tests | 74 passed, including 21 model/setup cases and the compiled Swift contract checks |
+| Pipecat Apple bridge, service and native-playback tests | 26 passed with repository-wide fixtures disabled (`--noconftest`) |
+| Python lint and formatting | Passed for app/scripts/tests and the modified TTS service |
+| Git model exclusions | Downloaded models and local build configuration remain ignored |
+| Xcode build-setting expansion | Public mode omits private defines, include path, and library; local opt-in enables all three |
+| Public simulator Debug build | Passed with normal signing; embedded Python reports `PIPECAT_PYTHON_READY` |
+| Signed iPhone Debug build and installation | Passed; installed on the paired iPhone 16 Pro |
+| iPhone Release build | Passed with code signing disabled for compilation/link verification |
+| Optional local provider simulator build | Passed; switching back to the public build removes the private model assets |
+| Public app bundle inspection | No private model directory or credential resource in either Debug build |
+| Public binary symbols | No linked private TTS C functions |
+| Swift contract checks | Default and migrated preferences, per-provider voice persistence, missing/corrupt/incomplete assets, cancellation and subsequent requests passed |
+| Public settings screen | PocketTTS, Alba default, bundled voice catalog and model attribution visible; no key prompt |
+| Simulator native PocketTTS diagnostic | Passed model initialization, finite/non-silent synthesis, actual playback drain, cancellation, restart, and continuous microphone capture; no HTTP(S) attempts |
+| Generated speech through Apple ASR/VAD handoff | Both consecutive sessions transcribed the complete test utterance; the second began at 3.2793125 s, preserving the audio clock |
+
+The Pipecat tests were run without repository-wide fixtures because the mobile
+environment does not install `python-dotenv`, required by the desktop fixture
+setup. Both Python runs report the existing `AudioContextTTSService` deprecation
+warning. Swift contract checks compile the production settings, asset validator,
+and request lifecycle code with the macOS SDK; model inference is tested in the
+iOS diagnostic, rather than mocked in those checks.
+
+The iPhone 17 Pro simulator (iOS 26.5) diagnostic measured 1.84 s for model
+verification/loading and 0.80 s to first audio. It generated 3.28 s of audio in
+9.18 s and drained cancelled inference in 0.19 s. Synthesis was slower than real
+time in this simulator run, so this does not establish acceptable iPhone latency.
+Core ML emitted simulator backend/cache warnings before loading successfully.
+Apple Speech recovered “Hello there. Pocket TTS is speaking on this device.”
+from the saved WAV in both consecutive ASR sessions, with a 58 ms first-session
+drain. These measurements are single runs, not performance benchmarks.
+
+Logs and the speech artifact are in `.build/pocket-simulator-build.log`,
+`.build/pocket-device-build.log`, `.build/pocket-release-build.log`, `.build/private-simulator-build.log`,
+`.build/pocket-simulator-runtime.log`, `.build/pocket-transcription-check.log`,
+and `.build/pocket-simulator-check.wav`. Reproduce the native diagnostic by
+launching a Debug build with `--verify-pocket-tts --verify-voice-settings`.
+
+The signed app is installed on the iPhone, but the first diagnostic launch was
+blocked by iOS because the device was locked. Hardware inference performance and
+a complete spoken ASR → LLM → TTS conversation still require that launch and a
+physical spoken test. Measure model loading, first audio, sustained synthesis,
+memory, playback underruns, and VAD-triggered interruption latency. Test
+speakerphone and Bluetooth routes; the deterministic native cancellation check
+does not establish acoustic echo rejection or noisy-room behavior.

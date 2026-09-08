@@ -9,6 +9,8 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
+from build_options import validate_phonon, write_build_options
+
 ROOT = Path(__file__).resolve().parents[1]
 DOWNLOADS = ROOT / ".build/downloads"
 PYTHON_URL = "https://github.com/beeware/Python-Apple-support/releases/download/3.13-b14/Python-3.13-iOS-support.b14.tar.gz"
@@ -37,9 +39,17 @@ def run(*args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platform", choices=["device", "simulator", "all"], default="all")
+    parser.add_argument("--enable-phonon", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if sys.version_info[:2] != (3, 13):
         raise SystemExit("Run with Python 3.13: uv run --no-sync python scripts/setup.py")
+    run(sys.executable, ROOT / "scripts/fetch_pocket_tts.py")
+    if args.enable_phonon:
+        try:
+            validate_phonon()
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
+    write_build_options(args.enable_phonon)
     if not (ROOT / "Vendor/Python.xcframework").exists():
         (ROOT / "Vendor").mkdir(exist_ok=True)
         with tarfile.open(fetch(PYTHON_URL, PYTHON_SHA256)) as archive:
@@ -53,7 +63,8 @@ def main():
         with tarfile.open(fetch(CORE_URL, CORE_SHA256)) as archive:
             archive.extractall(ROOT / ".build", filter="data")
     run("rustup", "target", "add", "aarch64-apple-ios", "aarch64-apple-ios-sim")
-    run(sys.executable, ROOT / "scripts/build_native.py", "--platform", args.platform)
+    native_args = ["--enable-phonon" if args.enable_phonon else "--disable-phonon"]
+    run(sys.executable, ROOT / "scripts/build_native.py", "--platform", args.platform, *native_args)
     run(sys.executable, ROOT / "scripts/stage_python.py")
     run(
         "uv",

@@ -9,6 +9,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from build_options import phonon_enabled, validate_phonon
+from fetch_pocket_tts import asset_path, load_manifest, verify_assets
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -19,6 +22,30 @@ def copy_tree(source: Path, target: Path):
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "libpython*.dylib"),
     )
+
+
+def bundle_models(bundle: Path, *, root: Path = ROOT, enable_phonon: bool = False) -> None:
+    """Copy only verified assets selected by the build's provider configuration."""
+    manifest_path = root / "scripts/pocket_tts_manifest.json"
+    manifest = load_manifest(manifest_path)
+    source = root / "models/pocket-tts"
+    verify_assets(source, manifest)
+    if enable_phonon:
+        validate_phonon(root)
+    # Always remove stale private assets when reusing an internal build directory.
+    for name in ["phonon", "pocket-tts"]:
+        target = bundle / name
+        if target.exists():
+            shutil.rmtree(target)
+    target = bundle / "pocket-tts"
+    for entry in manifest["files"]:
+        destination = asset_path(target, manifest, entry)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(asset_path(source, manifest, entry), destination)
+    shutil.copy2(manifest_path, target / "manifest.json")
+    if enable_phonon:
+        copy_tree(root / "models/phonon/model", bundle / "phonon/model")
+        copy_tree(root / "models/phonon/voices", bundle / "phonon/voices")
 
 
 def main():
@@ -38,7 +65,10 @@ def main():
     for path in required:
         if not path.exists():
             raise SystemExit(f"Missing {path}. Run: uv run --no-sync python scripts/setup.py")
-    for name in ["python", "python-app", "python-packages", "phonon"]:
+    bundle_models(bundle, enable_phonon=phonon_enabled())
+    shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", bundle / "THIRD_PARTY_NOTICES.md")
+    copy_tree(ROOT / "licenses", bundle / "licenses")
+    for name in ["python", "python-app", "python-packages"]:
         path = bundle / name
         if path.exists():
             shutil.rmtree(path)
@@ -59,8 +89,6 @@ def main():
     suffix = "iphonesimulator" if simulator else "iphoneos"
     core = bundle / f"python-packages/pydantic_core/_pydantic_core.cpython-313-{suffix}.so"
     shutil.copy2(required[-1], core)
-    copy_tree(ROOT / "models/phonon/model", bundle / "phonon/model")
-    copy_tree(ROOT / "models/phonon/voices", bundle / "phonon/voices")
 
     frameworks = bundle / "Frameworks"
     frameworks.mkdir(parents=True, exist_ok=True)
@@ -97,7 +125,7 @@ def main():
                     check=True,
                     stderr=subprocess.DEVNULL,
                 )
-    print("Bundled embedded Python, Pipecat mobile runtime, and Phonon assets")
+    print("Bundled embedded Python, Pipecat mobile runtime, and selected voice assets")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,6 @@
 import Foundation
 
-struct VoiceError: LocalizedError {
-    let message: String
-    var errorDescription: String? { message }
-}
-
+#if ENABLE_PHONON
 private final class CancellationToken: @unchecked Sendable {
     let pointer = phonon_cancellation_new()!
     func cancel() { phonon_cancel(pointer) }
@@ -18,14 +14,45 @@ private final class PCMContext {
     }
 }
 
-final class PhononSynthesizer: @unchecked Sendable {
+final class PhononSynthesizer: SpeechSynthesizer, @unchecked Sendable {
     private let queue = DispatchQueue(label: "voice.phonon", qos: .userInitiated)
     // All model access is serialized on queue. The C cancellation flag is atomic.
     private var model: OpaquePointer?
     private var loadedVoice = ""
     private var loadedKey = ""
 
-    func load(root: URL, voice: String, key: String) async throws {
+    func prepare(voice: String) async throws {
+        let key = VoiceSettings.loadKey()
+        guard VoiceSettings.validKey(key) else { throw VoiceError(message: "Enter a valid Gradium key in Voice settings.") }
+        guard let root = Bundle.main.url(forResource: "phonon", withExtension: nil) else {
+            throw VoiceError(message: "The selected voice model is missing from the app bundle.")
+        }
+        try Task.checkCancellation()
+        try await load(root: root, voice: voice, key: key)
+        try Task.checkCancellation()
+    }
+
+    func synthesize(_ text: String) async throws -> SpeechSynthesis {
+        SpeechSynthesis { [self] continuation in
+            let token = CancellationToken()
+            try await withTaskCancellationHandler {
+                try await speak(text, token: token, output: continuation)
+            } onCancel: { token.cancel() }
+        }
+    }
+
+    func unload() async {
+        await withCheckedContinuation { continuation in
+            queue.async { [self] in
+                if let model { phonon_free(model); self.model = nil }
+                loadedKey = ""
+                loadedVoice = ""
+                continuation.resume()
+            }
+        }
+    }
+
+    private func load(root: URL, voice: String, key: String) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async { [self] in
                 if model != nil && loadedVoice == voice && loadedKey == key {
@@ -46,16 +73,16 @@ final class PhononSynthesizer: @unchecked Sendable {
         }
     }
 
-    func stream(_ text: String) -> AsyncThrowingStream<[Float], Error> {
-        let token = CancellationToken()
-        return AsyncThrowingStream { continuation in
-            continuation.onTermination = { _ in token.cancel() }
+    private func speak(_ text: String, token: CancellationToken,
+                       output: AsyncThrowingStream<[Float], Error>.Continuation) async throws {
+        // Completion waits for the Rust call itself, including cancelled inference.
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async { [self, token] in
                 guard let model else {
-                    continuation.finish(throwing: VoiceError(message: "Phonon is not loaded."))
+                    continuation.resume(throwing: VoiceError(message: "Phonon is not loaded."))
                     return
                 }
-                let context = Unmanaged.passRetained(PCMContext(continuation))
+                let context = Unmanaged.passRetained(PCMContext(output))
                 defer { context.release() }
                 var error = [CChar](repeating: 0, count: 1024)
                 let status = phonon_speak(model, text, token.pointer, { samples, count, opaque in
@@ -66,9 +93,9 @@ final class PhononSynthesizer: @unchecked Sendable {
                     return true
                 }, context.toOpaque(), &error, error.count)
                 switch status {
-                case 0: continuation.finish()
-                case 1: continuation.finish(throwing: CancellationError())
-                default: continuation.finish(throwing: VoiceError(message: String(cString: error)))
+                case 0: continuation.resume()
+                case 1: continuation.resume(throwing: CancellationError())
+                default: continuation.resume(throwing: VoiceError(message: String(cString: error)))
                 }
             }
         }
@@ -76,3 +103,4 @@ final class PhononSynthesizer: @unchecked Sendable {
 
     deinit { if let model { phonon_free(model) } }
 }
+#endif

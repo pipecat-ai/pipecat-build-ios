@@ -1,277 +1,337 @@
 import SwiftUI
 
-private let ink = Color(red: 24 / 255, green: 24 / 255, blue: 27 / 255)
-private let paper = Color(red: 250 / 255, green: 250 / 255, blue: 250 / 255)
-private let accent = ink
-private let live = Color(red: 21 / 255, green: 128 / 255, blue: 61 / 255)
-
 struct ConversationView: View {
     @Bindable var model: ConversationModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var connecting: Bool { !model.ready || model.phase == .preparing }
+    private var hasConversation: Bool { !model.messages.isEmpty || !model.partial.isEmpty }
+    private var thinking: Bool {
+        model.phase == .thinking && model.messages.last?.role != "assistant"
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 9) {
-                Image("PipecatWordmark")
-                    .resizable().scaledToFit().frame(width: 166, height: 35)
-                    .accessibilityLabel("Pipecat")
-                Spacer()
-                Button { model.clearConversation() } label: {
-                    Image(systemName: "square.and.pencil").frame(width: 44, height: 44)
-                }.accessibilityLabel("New conversation").disabled(model.messages.isEmpty)
-                Button { model.showSettings = true } label: {
-                    Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
-                }.accessibilityLabel("Voice settings").disabled(model.active)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                header
+                presence(compact: geometry.size.height < 620 || dynamicTypeSize.isAccessibilitySize)
+                conversationHeading
+                ConversationChat(messages: model.transcriptMessages, thinking: thinking,
+                                 active: model.active && !connecting)
+                bottomControls
             }
-            .font(.system(size: 18)).padding(.horizontal, 24).padding(.top, 12)
-
-            VStack(spacing: 16) {
-                HStack(spacing: 6) {
-                    Circle().fill(model.active ? live : ink.opacity(0.3)).frame(width: 6, height: 6)
-                    Text(model.active ? "CONVERSATION IN PROGRESS" : "YOUR PERSONAL VOICE SPACE")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6)
-                }.foregroundStyle(ink.opacity(0.6))
-                VoiceOrb(level: model.level, active: model.active, phase: model.phase,
-                         reduceMotion: reduceMotion)
-                    .frame(width: 150, height: 150)
-                    .accessibilityHidden(true)
-                VStack(spacing: 6) {
-                    Text(model.ready ? model.phase.title : "Waking up Pipecat")
-                        .font(.system(size: 25, weight: .medium, design: .serif))
-                    Text(subtitle).font(.system(size: 12)).foregroundStyle(ink.opacity(0.52))
-                        .multilineTextAlignment(.center)
-                }
-            }.padding(.top, 24).padding(.bottom, 24)
-
-            HStack {
-                Text("CONVERSATION").tracking(1.7)
-                Spacer()
-                Text("ENGLISH · \(model.selectedVoice.uppercased())").tracking(0.7)
-            }.font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(ink.opacity(0.45)).padding(.horizontal, 28).padding(.bottom, 12)
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 23) {
-                        if model.messages.isEmpty && model.partial.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Image(systemName: "quote.opening").font(.title2).foregroundStyle(accent)
-                                Text("A thought. A question.\nSee where it takes you.")
-                                    .font(.system(size: 25, weight: .regular, design: .serif))
-                                    .lineSpacing(3)
-                                Text("Start talking and your conversation will appear here.")
-                                    .font(.system(size: 13)).foregroundStyle(ink.opacity(0.5))
-                            }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.white, in: RoundedRectangle(cornerRadius: 20))
-                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(ink.opacity(0.07), lineWidth: 1))
-                        }
-                        ForEach(model.messages) { message in
-                            TranscriptRow(message: message)
-                        }
-                        if !model.partial.isEmpty {
-                            TranscriptRow(message: TranscriptMessage(id: "partial", role: "user",
-                                                                    text: model.partial, isFinal: false))
-                                .opacity(0.65)
-                        }
-                        if model.phase == .thinking && model.messages.last?.role == "user" {
-                            HStack(spacing: 7) {
-                                ProgressView().controlSize(.mini)
-                                Text("Pipecat is thinking…").font(.system(size: 12))
-                            }.foregroundStyle(ink.opacity(0.5))
-                        }
-                        Color.clear.frame(height: 1).id("latest")
-                    }.padding(.horizontal, 24).padding(.vertical, 6)
-                }.scrollDismissesKeyboard(.interactively)
-                    .onChange(of: model.messages.last?.text) { _, _ in proxy.scrollTo("latest", anchor: .bottom) }
-                    .onChange(of: model.partial) { _, _ in proxy.scrollTo("latest", anchor: .bottom) }
-            }
-
-            if let error = model.error {
-                HStack(alignment: .top, spacing: 9) {
-                    Image(systemName: "exclamationmark.circle")
-                    Text(error).font(.system(size: 12))
-                    Spacer(minLength: 0)
-                    Button { model.error = nil } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Dismiss error")
-                }.foregroundStyle(.red).padding(14)
-                    .background(.red.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
-                    .padding(.horizontal, 24).padding(.top, 8)
-            }
-
-            VStack(spacing: 15) {
-                HStack(spacing: 27) {
-                    Button { model.toggleMute() } label: {
-                        Image(systemName: model.muted ? "mic.slash.fill" : "mic.fill")
-                            .font(.system(size: 19)).frame(width: 50, height: 50)
-                            .background(ink.opacity(0.06), in: Circle())
-                    }.disabled(!model.active || model.phase == .preparing)
-                        .accessibilityLabel(model.muted ? "Unmute microphone" : "Mute microphone")
-                    Button { model.primaryAction() } label: {
-                        HStack(spacing: 9) {
-                            if model.phase == .preparing { ProgressView().tint(.white) }
-                            else { Image(systemName: primaryIcon).font(.system(size: 17, weight: .semibold)) }
-                            Text(primaryTitle).font(.system(size: 14, weight: .semibold))
-                        }.frame(minWidth: 130, minHeight: 60).padding(.horizontal, 12)
-                            .foregroundStyle(.white).background(accent, in: Capsule())
-                    }.disabled(!model.ready || model.phase == .preparing)
-                        .accessibilityIdentifier("primaryVoiceControl")
-                    Button { model.stop() } label: {
-                        Image(systemName: "phone.down.fill").font(.system(size: 19))
-                            .frame(width: 50, height: 50).background(ink.opacity(0.06), in: Circle())
-                    }.disabled(!model.active).accessibilityLabel("End conversation")
-                }
-                Text("PIPECAT VOICE")
-                    .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(0.8)
-                    .foregroundStyle(ink.opacity(0.4))
-            }.padding(.top, 20).padding(.bottom, 18)
+            .frame(maxWidth: 720).frame(maxWidth: .infinity)
         }
-        .foregroundStyle(ink).background(paper).tint(ink)
+        .background {
+            Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+            LinearGradient(colors: [VoicePalette.surface.opacity(0.9), VoicePalette.surface.opacity(0)],
+                           startPoint: .top, endPoint: .center).ignoresSafeArea()
+        }
+        .tint(VoicePalette.blue)
+        .sensoryFeedback(.selection, trigger: model.muted)
+        .sensoryFeedback(.impact(weight: .light), trigger: model.active)
         .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
     }
 
-    private var subtitle: String {
-        switch model.phase {
-        case .idle: model.hasKey ? "A familiar voice. A fresh perspective." : "Add your Gradium key to start a conversation."
-        case .preparing: "Loading on-device models. First use may take a moment."
-        case .listening: "Pause to send, or tap Send now."
-        case .thinking, .speaking: "Tap to talk whenever you’re ready."
-        case .muted: "Take your time. Tap to unmute."
+    private var bottomControls: some View {
+        VStack(spacing: 10) {
+            if let error = model.error { errorBanner(error) }
+            controlDock
+        }
+        .frame(maxWidth: 520)
+        .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 10)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image("PipecatWordmark").resizable().scaledToFit()
+                .frame(width: 133, height: 30)
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Pipecat")
+            Spacer(minLength: 12)
+            GlassEffectContainer(spacing: 10) {
+                HStack(spacing: 10) {
+                    Button { model.clearConversation() } label: {
+                        Image(systemName: "square.and.pencil").frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("New conversation")
+                    .disabled(!hasConversation && !model.active)
+                    Button { model.showSettings = true } label: {
+                        Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Voice settings")
+                    .disabled(model.active)
+                }
+                .font(.system(size: 17, weight: .medium))
+                .buttonStyle(.glass).buttonBorderShape(.circle)
+            }
+        }
+        .padding(.horizontal, 22).padding(.top, 8).padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private func presence(compact: Bool) -> some View {
+        if compact {
+            HStack(spacing: 12) {
+                BotVoiceOrb(level: model.botLevel, speaking: model.botAudioPlaying)
+                    .frame(width: 64, height: 64)
+                statusText(alignment: .leading)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 8)
+        } else {
+            VStack(spacing: 4) {
+                BotVoiceOrb(level: model.botLevel, speaking: model.botAudioPlaying)
+                    .frame(width: hasConversation ? 144 : 184, height: hasConversation ? 144 : 184)
+                statusText(alignment: .center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, hasConversation ? 4 : 12).padding(.bottom, 22)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: hasConversation)
         }
     }
 
-    private var primaryTitle: String {
-        switch model.phase {
-        case .idle: model.hasKey ? "Let’s talk" : "Set up voice"
-        case .preparing: "Getting ready"
-        case .listening: "Send now"
-        case .thinking, .speaking: "Tap to talk"
-        case .muted: "Unmute"
+    private func statusText(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 6) {
+            Text(model.ready ? model.phase.title : "Waking up Pipecat")
+                .font(.title3.weight(.semibold)).fontDesign(.rounded)
+                .contentTransition(.opacity)
+            Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+                .multilineTextAlignment(alignment == .center ? .center : .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.horizontal, alignment == .center ? 20 : 0)
+        .accessibilityElement(children: .combine)
     }
 
-    private var primaryIcon: String {
-        switch model.phase {
-        case .listening: "arrow.up"
-        case .thinking, .speaking: "waveform"
-        default: "mic.fill"
+    private var conversationHeading: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Text("Conversation").font(.subheadline.weight(.semibold))
+                Spacer(minLength: 16)
+                voiceLabel
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Conversation").font(.subheadline.weight(.semibold))
+                voiceLabel
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 26).padding(.bottom, 8)
     }
-}
 
-private struct TranscriptRow: View {
-    let message: TranscriptMessage
-    var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            Group {
-                if message.role == "user" {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(ink.opacity(0.6))
+    private var voiceLabel: some View {
+        HStack(spacing: 5) {
+            Circle().fill(model.active ? VoicePalette.green : Color.secondary.opacity(0.45))
+                .frame(width: 5, height: 5).accessibilityHidden(true)
+            Text("\(model.selectedProvider.voiceTitle(model.selectedVoice)) · EN")
+                .font(.caption)
+        }.foregroundStyle(.secondary)
+            .accessibilityLabel("\(model.selectedProvider.voiceTitle(model.selectedVoice)) voice, English")
+    }
+
+    private var controlDock: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 20) {
+                if model.active {
+                    secondaryControl(title: actionTitle, icon: actionIcon,
+                                     disabled: connecting || model.phase == .muted,
+                                     action: model.primaryAction)
+                        .accessibilityIdentifier("primaryVoiceControl")
+                        .accessibilityLabel(model.phase == .thinking || model.phase == .speaking
+                                            ? "Interrupt Pipecat’s reply" : "Send your turn now")
+                    microphone
+                    secondaryControl(title: "End", icon: "phone.down.fill", disabled: false,
+                                     action: model.stop)
+                        .accessibilityLabel("End conversation")
                 } else {
-                    Image("PipecatMark").resizable().scaledToFit()
-                        .frame(width: 20, height: 12).foregroundStyle(ink)
+                    microphone
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(connecting ? "Getting ready" : model.needsVoiceSetup ? "Set up your voice" : "Let’s talk")
+                            .font(.headline).fontDesign(.rounded)
+                        Text(connecting ? "Just a moment…" : "Tap the mic to begin")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
-            .frame(width: 33, height: 33)
-            .background(ink.opacity(0.05), in: Circle())
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 7) {
-                    Text(message.role == "user" ? "You" : "Pipecat")
-                        .font(.system(size: 11, weight: .semibold))
-                    if message.interrupted {
-                        Text("Interrupted").font(.system(size: 9)).foregroundStyle(ink.opacity(0.4))
-                    }
-                }
-                Text(message.text).font(.system(size: 15)).lineSpacing(5)
-                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-            }.padding(.top, 4)
-            Spacer(minLength: 0)
-        }.accessibilityElement(children: .combine)
-    }
-}
-
-private struct VoiceOrb: View {
-    let level: Double
-    let active: Bool
-    let phase: VoicePhase
-    let reduceMotion: Bool
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || !active)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            ZStack {
-                Circle().stroke(ink.opacity(0.06), lineWidth: 1).padding(1)
-                Circle().fill(ink).padding(9)
-                Circle().stroke(.white.opacity(0.08), lineWidth: 1).padding(19)
-                Image("PipecatMark").resizable().scaledToFit()
-                    .frame(width: 83, height: 48).foregroundStyle(.white)
-                    .offset(y: -13)
-                HStack(spacing: 4) {
-                    ForEach(0..<11) { index in
-                        let wave = (sin(t * 3.2 + Double(index) * 0.65) + 1) / 2
-                        let envelope = sin(Double(index + 1) / 12 * .pi)
-                        let energy = active ? min(1, max(level, phase == .thinking ? 0.25 : 0.08)) : 0.0
-                        Capsule().fill(.white.opacity(active ? 0.85 : 0.3))
-                            .frame(width: 3, height: 3 + envelope * (3 + energy * 22 * wave))
-                    }
-                }.frame(height: 28).offset(y: 37)
-            }.shadow(color: ink.opacity(0.09), radius: 12, y: 8)
+            if model.active {
+                Text(microphoneStatus).font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+        .background {
+            if reduceTransparency {
+                RoundedRectangle(cornerRadius: 32).fill(VoicePalette.surface)
+                    .overlay(RoundedRectangle(cornerRadius: 32).stroke(Color.primary.opacity(0.10)))
+            }
+        }
+        .glassEffect(reduceTransparency ? .identity : .regular, in: .rect(cornerRadius: 32))
+    }
+
+    private var microphone: some View {
+        MicrophoneControl(level: model.userLevel, muted: model.muted, connecting: connecting,
+                          active: model.active) {
+            if model.active { model.toggleMute() } else { model.start() }
+        }
+    }
+
+    private func secondaryControl(title: String, icon: String, disabled: Bool,
+                                  action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: icon).font(.system(size: 20, weight: .medium))
+                    .frame(height: 24)
+                Text(title).font(.caption.weight(.medium))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(VoicePressStyle())
+        .foregroundStyle(disabled ? Color.secondary.opacity(0.4) : .primary)
+        .disabled(disabled)
+    }
+
+    private func errorBanner(_ error: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill").padding(.top, 2)
+            Text(error).font(.footnote).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button { model.error = nil } label: {
+                Image(systemName: "xmark").font(.caption.weight(.semibold))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }.accessibilityLabel("Dismiss error")
+        }
+        .foregroundStyle(colorScheme == .dark ? Color(red: 1, green: 0.55, blue: 0.58) : VoicePalette.red)
+        .padding(.leading, 14).padding(.vertical, 8)
+        .background(VoicePalette.surface, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(VoicePalette.red.opacity(0.2)))
+    }
+
+    private var subtitle: String {
+        if !model.ready { return "Your voice space is almost ready." }
+        switch model.phase {
+        case .idle: return model.needsVoiceSetup ? "Choose a voice to get started." : "A space to talk things through."
+        case .preparing: return "First use may take a moment."
+        case .listening: return model.userSpeaking ? "Keep going. I’m with you." : "Speak naturally. Pause to send."
+        case .thinking, .speaking: return model.muted ? "You’re muted. You can still listen." : "You can jump in anytime."
+        case .muted: return "Take your time. Unmute when you’re ready."
+        }
+    }
+
+    private var microphoneStatus: String {
+        if connecting { return "Connecting · just a moment" }
+        if model.muted { return "Microphone off · tap the red mic to unmute" }
+        return model.userSpeaking ? "Hearing you · pause to send" : "Microphone on · speak anytime"
+    }
+
+    private var actionTitle: String {
+        if model.phase == .thinking || model.phase == .speaking {
+            return dynamicTypeSize.isAccessibilitySize ? "Stop reply" : "Interrupt"
+        }
+        return dynamicTypeSize.isAccessibilitySize ? "Send" : "Send now"
+    }
+
+    private var actionIcon: String {
+        model.phase == .thinking || model.phase == .speaking ? "arrow.uturn.backward" : "arrow.up"
     }
 }
 
 private struct SettingsView: View {
     @Bindable var model: ConversationModel
     @Environment(\.dismiss) private var dismiss
-    @State private var key = VoiceSettings.loadKey()
+    @State private var configuration: VoiceConfiguration
+    @State private var key = ""
     @State private var error: String?
+
+    init(model: ConversationModel) {
+        self.model = model
+        var draft = model.voiceConfiguration
+        draft.provider = draft.effectiveProvider
+        _configuration = State(initialValue: draft)
+    }
+
+    private var provider: TTSProviderID { configuration.effectiveProvider }
+    private var voiceBinding: Binding<String> {
+        Binding(get: { configuration.voice(for: provider) },
+                set: { configuration.voices[provider.rawValue] = $0 })
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Your voice") {
-                    Picker("Voice", selection: $model.selectedVoice) {
-                        ForEach(VoiceSettings.voices, id: \.self) { Text($0) }
+                    if TTSProviderID.available.count > 1 {
+                        Picker("Speech provider", selection: $configuration.provider) {
+                            ForEach(TTSProviderID.available, id: \.self) { Text($0.title).tag($0) }
+                        }
+                    }
+                    Picker("Voice", selection: voiceBinding) {
+                        ForEach(provider.voices, id: \.self) { Text(provider.voiceTitle($0)).tag($0) }
                     }
                     LabeledContent("Language", value: "English (US)")
+                    if model.active { Text("End the conversation before changing voices.").font(.footnote) }
+                }.disabled(model.active)
+                #if ENABLE_PHONON
+                if provider == .phonon {
+                    Section {
+                        SecureField("Gradium key (gsk_…)", text: $key)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    } header: { Text("Gradium Phonon") } footer: {
+                        Text("Stored securely in this device’s Keychain. The supplied Phonon runtime requires a Gradium key and reports session data, including the text it speaks, to Gradium. Speech audio is generated on this device.")
+                    }.disabled(model.active)
                 }
-                Section {
-                    SecureField("Gradium key (gsk_…)", text: $key)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                } header: { Text("Gradium Phonon") } footer: {
-                    Text("Stored securely in this device’s Keychain. The supplied Phonon runtime requires a Gradium key and reports session data, including the text it speaks, to Gradium. Speech audio is generated on this device.")
-                }
+                #endif
                 Section("On this device") {
                     LabeledContent("Speech recognition", value: "Apple Speech")
                     LabeledContent("Language model", value: "Apple Foundation Models")
-                    LabeledContent("Speech synthesis", value: "Gradium Phonon")
+                    LabeledContent("Speech synthesis", value: provider.title)
+                    if provider == .pocketTTS {
+                        Text("PocketTTS generates speech on this device using bundled models. No account or key is required.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     if let availability = model.availability {
                         Label(availability, systemImage: "info.circle")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
-                    Text("Conversations stay in memory and clear when the app closes. Apple Intelligence must be enabled. Speech assets may download on first use.")
+                    Text("Conversations stay in memory and clear when the app closes. Apple Intelligence must be enabled. Apple speech assets may download on first use.")
                         .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Credits") {
+                    Text("PocketTTS by Kyutai. Core ML conversion by Fluid Inference, licensed under CC BY 4.0. FluidAudio is licensed under Apache 2.0.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Link("PocketTTS model and license", destination: URL(string: "https://huggingface.co/FluidInference/pocket-tts-coreml")!)
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }.navigationTitle("Voice settings").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
-                            let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard value.isEmpty || VoiceSettings.validKey(value) else {
-                                error = "Use a Phonon key starting with gsk_ followed by 64 lowercase hexadecimal characters."
-                                return
-                            }
+                        Button("Save") {
                             do {
-                                try VoiceSettings.saveKey(value)
-                                UserDefaults.standard.set(model.selectedVoice, forKey: "voice")
-                                model.hasKey = !value.isEmpty
+                                try model.saveVoiceConfiguration(configuration, key: key)
                                 dismiss()
                             } catch { self.error = error.localizedDescription }
-                        }
+                        }.disabled(model.active)
                     }
                 }
-        }.tint(accent)
+                .onAppear { loadPrivateKey() }
+                .onChange(of: provider) { _, _ in loadPrivateKey() }
+        }.tint(VoicePalette.blue)
+    }
+
+    private func loadPrivateKey() {
+        #if ENABLE_PHONON
+        if provider == .phonon { key = VoiceSettings.loadKey() }
+        #endif
     }
 }

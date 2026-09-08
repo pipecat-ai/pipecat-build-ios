@@ -1,110 +1,121 @@
 # Pipecat Voice for iOS
 
 A native SwiftUI voice app with **Pipecat running in embedded Python on the iPhone**.
-Apple Speech handles ASR, Apple Foundation Models generates replies, and the supplied
-Gradium Phonon model streams speech at 24 kHz. No Python server is required.
+Apple Speech recognizes speech, Apple Foundation Models generates replies, and
+PocketTTS provides local speech synthesis through FluidAudio. No Python server
+is required.
 
-The interface includes live transcripts, microphone level animation, mute, manual
-turn submission, tap-to-interrupt, end conversation, a voice picker, and Keychain
-storage for the Phonon key. The official Pipecat wordmark and cat symbol appear in
-the header, voice indicator, transcript avatars, and light/dark Home Screen icons.
-Vector artwork and its source are documented in [src/branding/README.md](src/branding/README.md).
+The SwiftUI interface pairs a luminous bot aura with a microphone button that
+meters user audio, turns red when muted, and shows a spinner while connecting.
+The aura expands, brightens, and swirls with 20 ms windows of played bot audio;
+quiet speech and pauses stay visibly quieter.
+Chat bubbles distinguish live transcription, composing replies, and final text;
+inline markers preserve interruptions. Native glass controls, light/dark
+appearance, Dynamic Type, VoiceOver, and Reduce Motion are supported. Capture and
+playback share a voice-processing audio engine for echo cancellation.
 
-## Run the app
+See [validation](docs/validation.md) for build and runtime checks and the
+remaining acoustic tests on a physical iPhone.
 
-On this checkout, the generated project and build artifacts are prepared. Open
-`PipecatVoice.xcodeproj`, select **PipecatVoice**, choose your signing team under
-**Signing & Capabilities**, and run on an Apple Intelligence-capable iPhone with
-**iOS 26 or later**. Enable Apple Intelligence in Settings and wait for its model
-download to finish.
+## Setup
 
-Tap **Set up voice** in the app and enter your Gradium **Phonon** key. It is stored
-in the device's Keychain. Keys are not read from local build configuration or
-included in any app build. The supplied runtime accepts `gsk_` followed by 64
-lowercase hexadecimal characters. Use **Voice settings** to change or clear a
-saved key; an existing installation may already have one in Keychain.
-
-Tap **Let’s talk** and allow microphone access. English speech assets may download
-on first use. Rebuild and run with **⌘R** to update an existing installation.
-
-Pause for roughly a second to submit a turn, or tap **Send now**. Playback finishes
-before listening resumes. **Tap to talk** interrupts a reply immediately. Muting
-stops microphone capture; ending the conversation also cancels generation and
-playback. The app stops its audio session when it enters the background.
-
-## Build from a fresh checkout
-
-Prerequisites: macOS, full Xcode 26+, the iOS SDK, an iOS 26 simulator for simulator
-checks, `uv`, and stable Rust with edition 2024 support. Add the supplied Phonon
-package to `models/phonon/`, following [models/README.txt](models/README.txt), and
-keep the modified `pipecat/` checkout in place. Model assets and inference source
-are supplied separately and ignored by Git.
+Requires macOS, Xcode 26+, `uv`, stable Rust with edition 2024 support, and the
+modified `pipecat/` checkout. Run:
 
 ```sh
 uv sync --locked --group native
 uv run --no-sync python scripts/setup.py
 ```
 
-The setup script downloads checksum-pinned Python 3.13.14 and pydantic-core 2.46.5
-sources, builds Rust libraries for iPhone and Apple silicon simulator, stages the
-mobile Python dependencies, and generates the Xcode project. The first native
-build takes several minutes. Use `--platform simulator` or `--platform device`
-to prepare just one target. Intel simulators are not included.
+The voice orb uses a bundled Metal shader. If Xcode reports a missing Metal
+compiler, install Apple's component with `xcodebuild -downloadComponent MetalToolchain`.
+
+Setup first fetches the pinned English PocketTTS model from Hugging Face
+(approximately **454 MB**, including 26 stock voices). Downloads are verified
+against SHA-256 checksums; rerunning reuses valid files and repairs incomplete
+or corrupt downloads. Model files live in `models/pocket-tts/`, are **ignored by
+Git**, and are copied into local app builds. No Hugging Face account is needed.
+
+To fetch or check the models independently:
 
 ```sh
-# Compile for the simulator.
+uv run --no-sync python scripts/fetch_pocket_tts.py
+uv run --no-sync python scripts/fetch_pocket_tts.py --verify-only
+```
+
+Setup also prepares checksum-pinned Python 3.13.14 and pydantic-core 2.46.5,
+builds native dependencies, stages the mobile Python packages, and generates the
+Xcode project with a revision-pinned FluidAudio package. Use `--platform simulator`
+or `--platform device` to prepare one target. Only Apple silicon simulators are
+supported. First-time setup and Swift package resolution require network access.
+
+Open `PipecatVoice.xcodeproj`, select **PipecatVoice**, and choose your signing team.
+The app requires an Apple Intelligence-capable iPhone with **iOS 26 or later**.
+Enable Apple Intelligence and allow its models to finish downloading. Apple
+English speech assets may download on first use.
+
+```sh
 xcodebuild -project PipecatVoice.xcodeproj -scheme PipecatVoice \
   -sdk iphonesimulator -configuration Debug \
   -derivedDataPath .build/DerivedData build
-
-# Validate a device release build; signing is configured separately in Xcode.
-xcodebuild -project PipecatVoice.xcodeproj -scheme PipecatVoice \
-  -sdk iphoneos -configuration Release \
-  -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO build
 ```
 
-Keep normal signing enabled for simulator runs: Xcode supplies the simulated
-application identifier needed by Keychain. Disabling signing can prevent the
-app from saving a key entered in Voice settings.
+Keep normal Xcode signing enabled for simulator runs. Do not copy native Python
+extensions from a desktop virtual environment into the app: setup cross-compiles
+the iOS extensions and packaging installs them as signed frameworks.
 
-Do not replace the staged dependencies with packages from a macOS virtual
-environment: desktop native extensions cannot load on iOS. The Xcode build phase
-copies Python's standard library and transforms its extensions, plus the
-cross-compiled pydantic-core extension, into separately signed frameworks with
-`.fwork` import markers. It includes the supplied model, tokenizer, and voices and
-omits Pipecat's desktop ONNX models and other unused media assets.
+## Conversation behavior
 
-## Pipecat changes
+Pause after speaking to submit a turn, or tap **Send now**. The microphone stays
+active while the assistant thinks and speaks. Speaking over a reply or tapping
+**Interrupt** interrupts it. Tap the green microphone to mute or the red
+microphone to unmute. Muting stops capture; ending the conversation or
+backgrounding the app cancels generation and playback and stops the audio session.
 
-The Python bot lives in `src/python/mobile_app/bot.py`. Native ASR, Foundation
-Models, Phonon, and playback context processors each have their own file under
-`src/python/mobile_app/processors/`. The bot uses Pipecat's `LLMTextProcessor`,
-`SimpleTextAggregator`, `LLMContext`, and standard text, context, TTS, and error
-frames. Apple's `NLTokenizer` supplies sentence boundaries through the native
-bridge, and Pipecat handles buffering, flushing, and interruption resets.
+Apple SoundAnalysis supplies acoustic speech confidence from 0.5-second windows
+at 0.1-second intervals. Pipecat applies confidence `0.65`, start duration `0.1`
+seconds, and stop duration `0.6` seconds. These settings live in `bot.py` and
+provide acoustic endpointing. Final ASR results are drained before the LLM starts;
+capture and VAD continue during that handoff.
 
-`pipecat/pyproject.toml` has `mobile` and `mobile-dev` dependency groups and a
-`mobile` extra. Platform markers omit desktop-only dependencies on `ios` and
-`android`, while retaining the existing desktop requirements. Extras are additive:
-an extra alone cannot subtract ONNX from mandatory dependencies, so the platform
-markers do the actual dependency split.
+Audio stays native. The Python pipeline receives transcripts, VAD confidence,
+playback events, and request results. Only fully played assistant sentences enter
+conversation context; interrupted sentences are omitted. Recent context is bounded
+to eight messages and 5,000 characters. Transcripts remain in app memory.
 
-Core imports defer NumPy, loudness, SOXR, audioop, Pillow, and DTMF dependencies
-until those features are used. The worker observer uses the standard library
-dataclass. `SimpleTextAggregator` accepts a native sentence matcher and an optional
-buffer bound; `LLMTextProcessor` preserves source turn metadata. This app uses
-native audio and explicit native turn boundaries, so it
-does not instantiate Silero, Smart Turn, or a Python audio transport. Android
-packaging and Python audio processing on mobile are not implemented here.
+PocketTTS assets are bundled and verified before loading, with no runtime model
+downloads. Apple ASR and LLM use device models.
+Provider failures are surfaced without a cloud or system-TTS fallback. The app is
+currently English-only. Speakerphone echo rejection and latency require testing
+on a physical iPhone.
 
-To install just the Pipecat mobile dependency group for desktop import checks:
+## Development
 
-```sh
-cd pipecat
-uv sync --only-group mobile
+The bot configuration is in `src/python/mobile_app/bot.py`:
+
+```text
+transport.input() → stt → context_aggregator.user() → llm
+                  → tts → transport.output() → context_aggregator.assistant()
 ```
 
-## Checks
+The bot imports concrete Apple TTS services:
+
+```python
+from pipecat.services.apple.pocket_tts import PocketTTSService
+from pipecat.services.apple.phonon import PhononTTSService
+```
+
+Both extend `AppleNativeTTSService` in `pipecat.services.apple.tts`, which shares
+the Apple/iOS playback integration with Pipecat's `TTSService`. A standard
+`ServiceSwitcher` selects the provider sent by the existing native settings UI
+in `start.provider` before each conversation. Swift prepares that provider and
+validates the provider tag on every `speak` request. The host keeps the selected
+voice, model loading, credentials, and PCM native.
+
+`AppleSpeechSTTService`, `AppleFoundationLLMService`, `AppleTransport`, and
+`AppleVADAnalyzer` provide the remaining native integrations; standard Pipecat
+services and aggregators manage turns and context. Mobile dependencies exclude
+desktop DSP and ONNX packages.
 
 ```sh
 uv run --no-sync pytest -q
@@ -112,42 +123,11 @@ uv run --no-sync ruff check src/python scripts tests
 uv run --no-sync ruff format --check src/python scripts tests
 ```
 
-The tests exercise a real Pipecat pipeline with a deterministic native host:
-streaming, sentence aggregation, playback acknowledgments, interruption during
-generation and playback, late callbacks, timeouts, and service errors. An import
-guard also rejects any desktop dependency during core imports.
+See [architecture](docs/architecture.md), [native TTS integration](docs/native-tts.md),
+and [validation](docs/validation.md). The official Pipecat artwork is documented
+in [src/branding/README.md](src/branding/README.md).
 
-A Debug build accepts `--verify-model-load` as a launch argument. It loads the
-bundled Phonon weights, tokenizer, and Marlowe voice and logs
-`PHONON_MODEL_LOADED`. This diagnostic does not synthesize speech or call Gradium.
-`PIPECAT_PYTHON_READY` confirms that the embedded interpreter started the real
-pipeline. Simulator checks do not establish microphone quality, model latency, or
-Foundation Models availability on a physical iPhone.
-
-## Runtime and data behavior
-
-The initial interaction is turn-based: microphone capture pauses during a reply
-to avoid transcribing speaker output. Interruptions are explicit using **Tap to
-talk**; automatic acoustic barge-in and streaming echo cancellation are not yet
-provided. Silence-based turn submission is a 1.1-second transcript debounce, not
-a semantic turn detector.
-
-Apple ASR and LLM inference use the device. Phonon synthesizes audio locally, but
-**the supplied Phonon runtime requires a Gradium key and sends session telemetry,
-including synthesized text, to `phonon.gradium.ai`**. Its authentication and
-telemetry behavior is preserved. This build therefore does not promise fully
-offline or fully private operation. Review the supplied model's Gradium terms
-before distributing it.
-
-Transcripts live in app memory. The model context retains bounded pairs of user
-messages and fully played assistant sentences. An interrupted sentence is omitted
-from future context. Model failures are surfaced; there is no cloud or system-TTS
-fallback. Language and phonon pronunciation are currently English-only.
-
-Implementation notes are in [docs/architecture.md](docs/architecture.md).
-
-References: [Apple SpeechAnalyzer](https://developer.apple.com/documentation/speech/speechanalyzer),
-[Apple Foundation Models](https://developer.apple.com/documentation/foundationmodels),
-[CPython on iOS](https://docs.python.org/3.13/using/ios.html),
-[BeeWare Python support](https://github.com/beeware/Python-Apple-support), and the
-[supplied Phonon documentation](models/phonon/README.md).
+PocketTTS is by [Kyutai](https://huggingface.co/kyutai/pocket-tts); the Core ML
+conversion is by [Fluid Inference](https://huggingface.co/FluidInference/pocket-tts-coreml).
+The pinned conversion is distributed under CC BY 4.0; retain this attribution in
+redistributed builds. See [third-party notices](THIRD_PARTY_NOTICES.md).

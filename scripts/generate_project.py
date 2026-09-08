@@ -4,7 +4,10 @@
 import hashlib
 import json
 import plistlib
+import re
 from pathlib import Path
+
+from fetch_pocket_tts import load_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 objects = {}
@@ -34,12 +37,21 @@ def render(value, depth=0):
 
 
 def main():
+    objects.clear()
+    existing = ROOT / "PipecatVoice.xcodeproj/project.pbxproj"
+    signing_team = None
+    if existing.exists():
+        match = re.search(r'"?DEVELOPMENT_TEAM"?\s*=\s*"?([A-Z0-9]+)"?\s*;', existing.read_text())
+        if match:
+            signing_team = match.group(1)
+    dependency = load_manifest(ROOT / "scripts/pocket_tts_manifest.json")["fluid_audio"]
     files, compiled, bundled = [], [], []
     for path in sorted((ROOT / "src/ios/PipecatVoice").iterdir()):
-        if path.suffix not in {".swift", ".m", ".h", ".xcassets"}:
+        if path.suffix not in {".swift", ".metal", ".m", ".h", ".xcassets"}:
             continue
         kind = {
             ".swift": "sourcecode.swift",
+            ".metal": "sourcecode.metal",
             ".m": "sourcecode.c.objc",
             ".h": "sourcecode.c.h",
             ".xcassets": "folder.assetcatalog",
@@ -73,6 +85,26 @@ def main():
         fileRef=python,
         settings={"ATTRIBUTES": ["CodeSignOnCopy", "RemoveHeadersOnCopy"]},
     )
+    build_config = obj(
+        "build-config",
+        isa="PBXFileReference",
+        lastKnownFileType="text.xcconfig",
+        path="config/Build.xcconfig",
+        sourceTree="<group>",
+    )
+    fluid_package = obj(
+        "fluid-audio-package",
+        isa="XCRemoteSwiftPackageReference",
+        repositoryURL=dependency["url"],
+        requirement={"kind": "revision", "revision": dependency["revision"]},
+    )
+    fluid_product = obj(
+        "fluid-audio-product",
+        isa="XCSwiftPackageProductDependency",
+        package=fluid_package,
+        productName="FluidAudio",
+    )
+    fluid_link = obj("fluid-audio-link", isa="PBXBuildFile", productRef=fluid_product)
     product = obj(
         "product",
         isa="PBXFileReference",
@@ -86,7 +118,7 @@ def main():
     group = obj(
         "root-group",
         isa="PBXGroup",
-        children=[source_group, python, products],
+        children=[source_group, python, build_config, products],
         sourceTree="<group>",
     )
     sources = obj(
@@ -100,7 +132,7 @@ def main():
         "framework-phase",
         isa="PBXFrameworksBuildPhase",
         buildActionMask=2147483647,
-        files=[python_link],
+        files=[python_link, fluid_link],
         runOnlyForDeploymentPostprocessing=0,
     )
     resources = obj(
@@ -117,7 +149,7 @@ def main():
         files=[],
         inputPaths=[],
         outputPaths=[],
-        name="Bundle Python and Phonon",
+        name="Bundle Python and voice assets",
         shellPath="/bin/sh",
         shellScript='set -eu\n"$SRCROOT/.venv/bin/python" "$SRCROOT/scripts/bundle_runtime.py"\n',
         alwaysOutOfDate=1,
@@ -154,7 +186,12 @@ def main():
         "INFOPLIST_FILE": "src/ios/PipecatVoice/Info.plist",
         "GENERATE_INFOPLIST_FILE": "NO",
         "SWIFT_OBJC_BRIDGING_HEADER": "src/ios/PipecatVoice/PipecatVoice-Bridging-Header.h",
-        "HEADER_SEARCH_PATHS": ["$(inherited)", "$(SRCROOT)/native/phonon-ffi/include"],
+        "HEADER_SEARCH_PATHS": ["$(inherited)", "$(PIPECAT_PHONON_HEADER_PATH)"],
+        "GCC_PREPROCESSOR_DEFINITIONS": ["$(inherited)", "$(PIPECAT_PHONON_C_DEFINITION)"],
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS": [
+            "$(inherited)",
+            "$(PIPECAT_PHONON_SWIFT_CONDITION)",
+        ],
         "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": [
             "$(inherited)",
             "$(SRCROOT)/.build/rust/aarch64-apple-ios/release",
@@ -166,7 +203,7 @@ def main():
         "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/Frameworks"],
         "OTHER_LDFLAGS": [
             "$(inherited)",
-            "-lphonon_ffi",
+            "$(PIPECAT_PHONON_LDFLAGS)",
             "-lc++",
             "-liconv",
             "-lresolv",
@@ -174,18 +211,25 @@ def main():
             "Security",
             "-framework",
             "NaturalLanguage",
+            "-framework",
+            "SoundAnalysis",
         ],
         "CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER": "NO",
         "MARKETING_VERSION": "0.1.0",
         "CURRENT_PROJECT_VERSION": "1",
     }
+    if signing_team:
+        target_settings["DEVELOPMENT_TEAM"] = signing_team
 
     def configurations(prefix, base):
         values = []
         for name in ["Debug", "Release"]:
             settings = dict(base)
             if name == "Debug":
-                settings["SWIFT_ACTIVE_COMPILATION_CONDITIONS"] = ["$(inherited)", "DEBUG"]
+                settings["SWIFT_ACTIVE_COMPILATION_CONDITIONS"] = [
+                    *settings.get("SWIFT_ACTIVE_COMPILATION_CONDITIONS", ["$(inherited)"]),
+                    "DEBUG",
+                ]
             settings.update(
                 {
                     "SWIFT_OPTIMIZATION_LEVEL": "-Onone" if name == "Debug" else "-O",
@@ -194,7 +238,13 @@ def main():
                 }
             )
             values.append(
-                obj(prefix + name, isa="XCBuildConfiguration", name=name, buildSettings=settings)
+                obj(
+                    prefix + name,
+                    isa="XCBuildConfiguration",
+                    name=name,
+                    buildSettings=settings,
+                    **({"baseConfigurationReference": build_config} if prefix == "target" else {}),
+                )
             )
         return obj(
             prefix + "configs",
@@ -215,6 +265,7 @@ def main():
         buildPhases=[sources, frameworks, resources, bundle, embed],
         buildRules=[],
         dependencies=[],
+        packageProductDependencies=[fluid_product],
     )
     project = obj(
         "project",
@@ -229,6 +280,7 @@ def main():
         projectDirPath="",
         projectRoot="",
         targets=[target],
+        packageReferences=[fluid_package],
         attributes={"LastUpgradeCheck": "2600", "BuildIndependentTargetsInParallel": "YES"},
     )
     folder = ROOT / "PipecatVoice.xcodeproj"

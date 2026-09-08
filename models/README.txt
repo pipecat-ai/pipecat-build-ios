@@ -1,31 +1,18 @@
-Drop the supplied Gradium Phonon package into this folder before building.
-Keep the folder name "phonon" and include the Rust inference source as well as
-the model files. The app's native wrapper depends on models/phonon/Cargo.toml.
+PocketTTS model files are downloaded by setup, not committed to Git.
 
-Expected layout:
+Fetch independently:
+  uv run --no-sync python scripts/fetch_pocket_tts.py
 
-models/
-  README.txt
-  phonon/
-    Cargo.toml
-    Cargo.lock
-    src/
-    model/
-      model.q8.gguf
-      config.json
-      tokenizer.model
-    voices/
-      Marlowe.safetensors
-      Freya.safetensors
-      Archie.safetensors
-      Freddie.safetensors
-      Elodie-Rose.safetensors
-      Garrett.safetensors
-      Damon.safetensors
-      Zoey.safetensors
+Verify without network access:
+  uv run --no-sync python scripts/fetch_pocket_tts.py --verify-only
 
-Everything in models/ except this note is ignored by Git. Keep all supplied
-voice files so that every option in the app's voice picker is available.
+The pinned English int8 assets and stock voices are stored in models/pocket-tts/.
+The tracked manifest is scripts/pocket_tts_manifest.json. Setup and Xcode builds
+verify its required files; the app bundle receives only those assets.
 
-Enter your Gradium Phonon key in the app under Set up voice or Voice settings.
-The app stores it in the device's Keychain; keys are not included in builds.
+Everything in models/ except this note is ignored by Git. Reuse verified files
+by rerunning the fetch script after an interrupted download.
+
+Source: https://huggingface.co/FluidInference/pocket-tts-coreml
+PocketTTS by Kyutai; Core ML conversion by Fluid Inference.
+See THIRD_PARTY_NOTICES.md for attribution.

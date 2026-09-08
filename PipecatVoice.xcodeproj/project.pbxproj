@@ -1,361 +1,463 @@
 // !$*UTF8*$!
 {
-	archiveVersion = 1;
-	classes = {
+	"archiveVersion" = 1;
+	"classes" = {
 	};
-	objectVersion = 56;
-	objects = {
-
-/* Begin PBXBuildFile section */
-		411C3DED7C3971027AC9B6DB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 795A02A63DC9C1E86758E98F /* Assets.xcassets */; };
-		035E23A9A9A42CFF5E1A67DE /* PCPythonRuntime.m in Sources */ = {isa = PBXBuildFile; fileRef = 3C111AF09AF64E97649F92E2 /* PCPythonRuntime.m */; };
-		055FFA10C7A482F4C0BFF367 /* PCMPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2085438C0201B57D40AF4139 /* PCMPlayer.swift */; };
-		11CE4120F618BBD9403E86E0 /* VoiceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CB7038E21365C7224EF8B9B /* VoiceSettings.swift */; };
-		1AE3D5E81CDBBE1CBA4E37BB /* Vendor/Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 11A4A60B518BF24989D48146 /* Vendor/Python.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		3195C0DE1E42CE74F7E37009 /* PhononSynthesizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA83FA7AE8CED73BA30B2A73 /* PhononSynthesizer.swift */; };
-		39C71F05151FD5B17BCD86C1 /* PipecatVoiceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E7C1B3954CECED689DA9FC /* PipecatVoiceApp.swift */; };
-		4E5A84A51DF07A55260B7CEA /* AppleLanguageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC225681650011309A554813 /* AppleLanguageModel.swift */; };
-		623FD1859B194F5890B94A70 /* Vendor/Python.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 11A4A60B518BF24989D48146 /* Vendor/Python.xcframework */; };
-		897A2FA6F4EAF14CB4A9CB7F /* AppleSpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA6229F0E8E86238B738242 /* AppleSpeechRecognizer.swift */; };
-		9EB4F9D3674633C1BAD1FD8F /* ConversationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CEBDD85B035067E28B08B89 /* ConversationModel.swift */; };
-		C05414217A087B763F4D966F /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B90C67309C0DE54E607073A /* ConversationView.swift */; };
-/* End PBXBuildFile section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		6B3E090DB545F4D7E323DB6E /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				1AE3D5E81CDBBE1CBA4E37BB /* Vendor/Python.xcframework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
+	"objectVersion" = 56;
+	"objects" = {
+		"FC225681650011309A554813" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "AppleLanguageModel.swift";
+			"sourceTree" = "<group>";
 		};
-/* End PBXCopyFilesBuildPhase section */
-
-/* Begin PBXFileReference section */
-		795A02A63DC9C1E86758E98F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		11A4A60B518BF24989D48146 /* Vendor/Python.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Vendor/Python.xcframework; sourceTree = "<group>"; };
-		1CB7038E21365C7224EF8B9B /* VoiceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettings.swift; sourceTree = "<group>"; };
-		2085438C0201B57D40AF4139 /* PCMPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCMPlayer.swift; sourceTree = "<group>"; };
-		2CEBDD85B035067E28B08B89 /* ConversationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModel.swift; sourceTree = "<group>"; };
-		3C111AF09AF64E97649F92E2 /* PCPythonRuntime.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PCPythonRuntime.m; sourceTree = "<group>"; };
-		501DF6C661087C66BFAE7D2F /* PCPythonRuntime.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PCPythonRuntime.h; sourceTree = "<group>"; };
-		5B90C67309C0DE54E607073A /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
-		8B885231832250AA87C02EAE /* PipecatVoice-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PipecatVoice-Bridging-Header.h"; sourceTree = "<group>"; };
-		A8792157CB4F27FB949C035F /* PipecatVoice.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = PipecatVoice.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BFA6229F0E8E86238B738242 /* AppleSpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechRecognizer.swift; sourceTree = "<group>"; };
-		DA83FA7AE8CED73BA30B2A73 /* PhononSynthesizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhononSynthesizer.swift; sourceTree = "<group>"; };
-		F2E7C1B3954CECED689DA9FC /* PipecatVoiceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipecatVoiceApp.swift; sourceTree = "<group>"; };
-		FC225681650011309A554813 /* AppleLanguageModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleLanguageModel.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		8A7588AD5FA397C62F95C6FE /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				623FD1859B194F5890B94A70 /* Vendor/Python.xcframework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		"4E5A84A51DF07A55260B7CEA" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "FC225681650011309A554813";
 		};
-/* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXGroup section */
-		0A3E27B8CA818264D75C8D81 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				A8792157CB4F27FB949C035F /* PipecatVoice.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
+		"BFA6229F0E8E86238B738242" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "AppleSpeechRecognizer.swift";
+			"sourceTree" = "<group>";
 		};
-		878A52FC5FF6A57D50B7B870 /* src/ios/PipecatVoice */ = {
-			isa = PBXGroup;
-			children = (
-				795A02A63DC9C1E86758E98F /* Assets.xcassets */,
-				FC225681650011309A554813 /* AppleLanguageModel.swift */,
-				BFA6229F0E8E86238B738242 /* AppleSpeechRecognizer.swift */,
-				2CEBDD85B035067E28B08B89 /* ConversationModel.swift */,
-				5B90C67309C0DE54E607073A /* ConversationView.swift */,
-				2085438C0201B57D40AF4139 /* PCMPlayer.swift */,
-				501DF6C661087C66BFAE7D2F /* PCPythonRuntime.h */,
-				3C111AF09AF64E97649F92E2 /* PCPythonRuntime.m */,
-				DA83FA7AE8CED73BA30B2A73 /* PhononSynthesizer.swift */,
-				8B885231832250AA87C02EAE /* PipecatVoice-Bridging-Header.h */,
-				F2E7C1B3954CECED689DA9FC /* PipecatVoiceApp.swift */,
-				1CB7038E21365C7224EF8B9B /* VoiceSettings.swift */,
-			);
-			path = src/ios/PipecatVoice;
-			sourceTree = "<group>";
+		"897A2FA6F4EAF14CB4A9CB7F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BFA6229F0E8E86238B738242";
 		};
-		C69913C7EE4DFDD011BE172F = {
-			isa = PBXGroup;
-			children = (
-				878A52FC5FF6A57D50B7B870 /* src/ios/PipecatVoice */,
-				11A4A60B518BF24989D48146 /* Vendor/Python.xcframework */,
-				0A3E27B8CA818264D75C8D81 /* Products */,
-			);
-			sourceTree = "<group>";
+		"795A02A63DC9C1E86758E98F" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"path" = "Assets.xcassets";
+			"sourceTree" = "<group>";
 		};
-/* End PBXGroup section */
-
-/* Begin PBXNativeTarget section */
-		34A04005BCAF206EEC990BD9 /* PipecatVoice */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 1B672BF3DA427763BF644BE3 /* Build configuration list for PBXNativeTarget "PipecatVoice" */;
-			buildPhases = (
-				D626F04DF571B9BB2451CBFE /* Sources */,
-				8A7588AD5FA397C62F95C6FE /* Frameworks */,
-				5C2473E515024614E403B8B9 /* Resources */,
-				91333E0C5CD1BAC2177B8AB3 /* Bundle Python and Phonon */,
-				6B3E090DB545F4D7E323DB6E /* Embed Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = PipecatVoice;
-			productName = PipecatVoice;
-			productReference = A8792157CB4F27FB949C035F /* PipecatVoice.app */;
-			productType = "com.apple.product-type.application";
+		"411C3DED7C3971027AC9B6DB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "795A02A63DC9C1E86758E98F";
 		};
-/* End PBXNativeTarget section */
-
-/* Begin PBXProject section */
-		244210E48437B6556980A702 /* Project object */ = {
-			isa = PBXProject;
-			attributes = {
-				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2600;
+		"E5B58C68FCE894F5B73EBBB3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.metal";
+			"path" = "BotVoiceOrb.metal";
+			"sourceTree" = "<group>";
+		};
+		"A608496A614D40667E957A37" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E5B58C68FCE894F5B73EBBB3";
+		};
+		"9E0FD6E41AC756C2557B03F0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "ConversationChat.swift";
+			"sourceTree" = "<group>";
+		};
+		"13C86356D317EC20421D9333" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "9E0FD6E41AC756C2557B03F0";
+		};
+		"2CEBDD85B035067E28B08B89" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "ConversationModel.swift";
+			"sourceTree" = "<group>";
+		};
+		"9EB4F9D3674633C1BAD1FD8F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2CEBDD85B035067E28B08B89";
+		};
+		"D4ED0B83486677E1B73FB75C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "ConversationTranscript.swift";
+			"sourceTree" = "<group>";
+		};
+		"F374C808EFFF7ED22BD0DFE5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D4ED0B83486677E1B73FB75C";
+		};
+		"5B90C67309C0DE54E607073A" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "ConversationView.swift";
+			"sourceTree" = "<group>";
+		};
+		"C05414217A087B763F4D966F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "5B90C67309C0DE54E607073A";
+		};
+		"2085438C0201B57D40AF4139" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "PCMPlayer.swift";
+			"sourceTree" = "<group>";
+		};
+		"055FFA10C7A482F4C0BFF367" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2085438C0201B57D40AF4139";
+		};
+		"501DF6C661087C66BFAE7D2F" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.c.h";
+			"path" = "PCPythonRuntime.h";
+			"sourceTree" = "<group>";
+		};
+		"3C111AF09AF64E97649F92E2" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.c.objc";
+			"path" = "PCPythonRuntime.m";
+			"sourceTree" = "<group>";
+		};
+		"035E23A9A9A42CFF5E1A67DE" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3C111AF09AF64E97649F92E2";
+		};
+		"DA83FA7AE8CED73BA30B2A73" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "PhononSynthesizer.swift";
+			"sourceTree" = "<group>";
+		};
+		"3195C0DE1E42CE74F7E37009" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "DA83FA7AE8CED73BA30B2A73";
+		};
+		"8B885231832250AA87C02EAE" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.c.h";
+			"path" = "PipecatVoice-Bridging-Header.h";
+			"sourceTree" = "<group>";
+		};
+		"F2E7C1B3954CECED689DA9FC" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "PipecatVoiceApp.swift";
+			"sourceTree" = "<group>";
+		};
+		"39C71F05151FD5B17BCD86C1" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "F2E7C1B3954CECED689DA9FC";
+		};
+		"33D67CCCCE5F177389F48F57" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "PocketTTSAssets.swift";
+			"sourceTree" = "<group>";
+		};
+		"6F731591D06A250B11A4F542" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "33D67CCCCE5F177389F48F57";
+		};
+		"9D635B0CEF52D940EE75859B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "PocketTTSSynthesizer.swift";
+			"sourceTree" = "<group>";
+		};
+		"45FC9CD598B68240491AF8F2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "9D635B0CEF52D940EE75859B";
+		};
+		"23FD943342AA8CCA222EBE25" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "SpeechSynthesizer.swift";
+			"sourceTree" = "<group>";
+		};
+		"7029D17A385665F2135609BF" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "23FD943342AA8CCA222EBE25";
+		};
+		"BC3CEEE8BC1B6FB6F61FC08E" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "SpeechSynthesizers.swift";
+			"sourceTree" = "<group>";
+		};
+		"2D85BC0406585003C234A355" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BC3CEEE8BC1B6FB6F61FC08E";
+		};
+		"680EFAEF9909B4E56444BF4C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "TTSDiagnostics.swift";
+			"sourceTree" = "<group>";
+		};
+		"C4C01067A3287FA514212060" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "680EFAEF9909B4E56444BF4C";
+		};
+		"455090DC6E095A84BA729B63" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "VoiceAudioEngine.swift";
+			"sourceTree" = "<group>";
+		};
+		"C9A752A88E5E988D2660D02E" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "455090DC6E095A84BA729B63";
+		};
+		"1CB7038E21365C7224EF8B9B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "VoiceSettings.swift";
+			"sourceTree" = "<group>";
+		};
+		"11CE4120F618BBD9403E86E0" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1CB7038E21365C7224EF8B9B";
+		};
+		"A13012C3073CA265B9933FBA" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "VoiceVisuals.swift";
+			"sourceTree" = "<group>";
+		};
+		"DCD57B482AF34A6D37D5C391" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "A13012C3073CA265B9933FBA";
+		};
+		"878A52FC5FF6A57D50B7B870" = {
+			"isa" = "PBXGroup";
+			"children" = ("FC225681650011309A554813", "BFA6229F0E8E86238B738242", "795A02A63DC9C1E86758E98F", "E5B58C68FCE894F5B73EBBB3", "9E0FD6E41AC756C2557B03F0", "2CEBDD85B035067E28B08B89", "D4ED0B83486677E1B73FB75C", "5B90C67309C0DE54E607073A", "2085438C0201B57D40AF4139", "501DF6C661087C66BFAE7D2F", "3C111AF09AF64E97649F92E2", "DA83FA7AE8CED73BA30B2A73", "8B885231832250AA87C02EAE", "F2E7C1B3954CECED689DA9FC", "33D67CCCCE5F177389F48F57", "9D635B0CEF52D940EE75859B", "23FD943342AA8CCA222EBE25", "BC3CEEE8BC1B6FB6F61FC08E", "680EFAEF9909B4E56444BF4C", "455090DC6E095A84BA729B63", "1CB7038E21365C7224EF8B9B", "A13012C3073CA265B9933FBA");
+			"path" = "src/ios/PipecatVoice";
+			"sourceTree" = "<group>";
+		};
+		"11A4A60B518BF24989D48146" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "wrapper.xcframework";
+			"path" = "Vendor/Python.xcframework";
+			"sourceTree" = "<group>";
+		};
+		"623FD1859B194F5890B94A70" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11A4A60B518BF24989D48146";
+		};
+		"1AE3D5E81CDBBE1CBA4E37BB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11A4A60B518BF24989D48146";
+			"settings" = {
+				"ATTRIBUTES" = ("CodeSignOnCopy", "RemoveHeadersOnCopy");
 			};
-			buildConfigurationList = 76F8DEC3DFE0BDB465198890 /* Build configuration list for PBXProject "PipecatVoice" */;
-			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = en;
-			hasScannedForEncodings = 0;
-			knownRegions = (
-				en,
-				Base,
-			);
-			mainGroup = C69913C7EE4DFDD011BE172F;
-			productRefGroup = 0A3E27B8CA818264D75C8D81 /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
-			targets = (
-				34A04005BCAF206EEC990BD9 /* PipecatVoice */,
-			);
 		};
-/* End PBXProject section */
-
-/* Begin PBXResourcesBuildPhase section */
-		5C2473E515024614E403B8B9 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				411C3DED7C3971027AC9B6DB /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		"D3ABCD00AA259FE2DA299E51" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.xcconfig";
+			"path" = "config/Build.xcconfig";
+			"sourceTree" = "<group>";
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		91333E0C5CD1BAC2177B8AB3 /* Bundle Python and Phonon */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Bundle Python and Phonon";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -eu\n\"$SRCROOT/.venv/bin/python\" \"$SRCROOT/scripts/bundle_runtime.py\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		D626F04DF571B9BB2451CBFE /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				4E5A84A51DF07A55260B7CEA /* AppleLanguageModel.swift in Sources */,
-				897A2FA6F4EAF14CB4A9CB7F /* AppleSpeechRecognizer.swift in Sources */,
-				9EB4F9D3674633C1BAD1FD8F /* ConversationModel.swift in Sources */,
-				C05414217A087B763F4D966F /* ConversationView.swift in Sources */,
-				055FFA10C7A482F4C0BFF367 /* PCMPlayer.swift in Sources */,
-				035E23A9A9A42CFF5E1A67DE /* PCPythonRuntime.m in Sources */,
-				3195C0DE1E42CE74F7E37009 /* PhononSynthesizer.swift in Sources */,
-				39C71F05151FD5B17BCD86C1 /* PipecatVoiceApp.swift in Sources */,
-				11CE4120F618BBD9403E86E0 /* VoiceSettings.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase section */
-
-/* Begin XCBuildConfiguration section */
-		0B0C687DF8B6B8DC790B519C /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = arm64;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_OPTIMIZATION_LEVEL = s;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				SDKROOT = iphoneos;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = targeted;
-				SWIFT_VERSION = 5.0;
+		"08AEB2DD89524F1E9600F4EB" = {
+			"isa" = "XCRemoteSwiftPackageReference";
+			"repositoryURL" = "https://github.com/FluidInference/FluidAudio.git";
+			"requirement" = {
+				"kind" = "revision";
+				"revision" = "5c19d5e12320e22bbfb7a1877b089d2665a69add";
 			};
-			name = Release;
 		};
-		6C7EFF6369083C8E1F2B1994 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = T2S6FJ6R3Q;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/native/phonon-ffi/include",
-				);
-				INFOPLIST_FILE = src/ios/PipecatVoice/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"$(SRCROOT)/.build/rust/aarch64-apple-ios/release",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"$(SRCROOT)/.build/rust/aarch64-apple-ios-sim/release",
-				);
-				MARKETING_VERSION = 0.1.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lphonon_ffi",
-					"-lc++",
-					"-liconv",
-					"-lresolv",
-					"-framework",
-					Security,
-					"-framework",
-					NaturalLanguage,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = ai.pipecat.voice;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
-				SWIFT_OBJC_BRIDGING_HEADER = "src/ios/PipecatVoice/PipecatVoice-Bridging-Header.h";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				TARGETED_DEVICE_FAMILY = "1,2";
+		"20E73971D361D8889C8CC8DE" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "08AEB2DD89524F1E9600F4EB";
+			"productName" = "FluidAudio";
+		};
+		"A999FB55F4FD0670509447E6" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "20E73971D361D8889C8CC8DE";
+		};
+		"A8792157CB4F27FB949C035F" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"path" = "PipecatVoice.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"0A3E27B8CA818264D75C8D81" = {
+			"isa" = "PBXGroup";
+			"children" = ("A8792157CB4F27FB949C035F");
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"C69913C7EE4DFDD011BE172F" = {
+			"isa" = "PBXGroup";
+			"children" = ("878A52FC5FF6A57D50B7B870", "11A4A60B518BF24989D48146", "D3ABCD00AA259FE2DA299E51", "0A3E27B8CA818264D75C8D81");
+			"sourceTree" = "<group>";
+		};
+		"D626F04DF571B9BB2451CBFE" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ("4E5A84A51DF07A55260B7CEA", "897A2FA6F4EAF14CB4A9CB7F", "A608496A614D40667E957A37", "13C86356D317EC20421D9333", "9EB4F9D3674633C1BAD1FD8F", "F374C808EFFF7ED22BD0DFE5", "C05414217A087B763F4D966F", "055FFA10C7A482F4C0BFF367", "035E23A9A9A42CFF5E1A67DE", "3195C0DE1E42CE74F7E37009", "39C71F05151FD5B17BCD86C1", "6F731591D06A250B11A4F542", "45FC9CD598B68240491AF8F2", "7029D17A385665F2135609BF", "2D85BC0406585003C234A355", "C4C01067A3287FA514212060", "C9A752A88E5E988D2660D02E", "11CE4120F618BBD9403E86E0", "DCD57B482AF34A6D37D5C391");
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"8A7588AD5FA397C62F95C6FE" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ("623FD1859B194F5890B94A70", "A999FB55F4FD0670509447E6");
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"5C2473E515024614E403B8B9" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ("411C3DED7C3971027AC9B6DB");
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"91333E0C5CD1BAC2177B8AB3" = {
+			"isa" = "PBXShellScriptBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ();
+			"inputPaths" = ();
+			"outputPaths" = ();
+			"name" = "Bundle Python and voice assets";
+			"shellPath" = "/bin/sh";
+			"shellScript" = "set -eu\n\"$SRCROOT/.venv/bin/python\" \"$SRCROOT/scripts/bundle_runtime.py\"\n";
+			"alwaysOutOfDate" = 1;
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"6B3E090DB545F4D7E323DB6E" = {
+			"isa" = "PBXCopyFilesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"dstPath" = "";
+			"dstSubfolderSpec" = 10;
+			"files" = ("1AE3D5E81CDBBE1CBA4E37BB");
+			"name" = "Embed Frameworks";
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"6C7EFF6369083C8E1F2B1994" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+			"buildSettings" = {
+				"PRODUCT_BUNDLE_IDENTIFIER" = "ai.pipecat.voice";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"INFOPLIST_FILE" = "src/ios/PipecatVoice/Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SWIFT_OBJC_BRIDGING_HEADER" = "src/ios/PipecatVoice/PipecatVoice-Bridging-Header.h";
+				"HEADER_SEARCH_PATHS" = ("$(inherited)", "$(PIPECAT_PHONON_HEADER_PATH)");
+				"GCC_PREPROCESSOR_DEFINITIONS" = ("$(inherited)", "$(PIPECAT_PHONON_C_DEFINITION)");
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = ("$(inherited)", "$(PIPECAT_PHONON_SWIFT_CONDITION)", "DEBUG");
+				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = ("$(inherited)", "$(SRCROOT)/.build/rust/aarch64-apple-ios/release");
+				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = ("$(inherited)", "$(SRCROOT)/.build/rust/aarch64-apple-ios-sim/release");
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"OTHER_LDFLAGS" = ("$(inherited)", "$(PIPECAT_PHONON_LDFLAGS)", "-lc++", "-liconv", "-lresolv", "-framework", "Security", "-framework", "NaturalLanguage", "-framework", "SoundAnalysis");
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "NO";
+				"MARKETING_VERSION" = "0.1.0";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"DEVELOPMENT_TEAM" = "T2S6FJ6R3Q";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
 			};
-			name = Debug;
+			"baseConfigurationReference" = "D3ABCD00AA259FE2DA299E51";
 		};
-		73EBF6644258C120893E685D /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = arm64;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = targeted;
-				SWIFT_VERSION = 5.0;
+		"DD75E2CB1C510A828AC72D96" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+			"buildSettings" = {
+				"PRODUCT_BUNDLE_IDENTIFIER" = "ai.pipecat.voice";
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"INFOPLIST_FILE" = "src/ios/PipecatVoice/Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SWIFT_OBJC_BRIDGING_HEADER" = "src/ios/PipecatVoice/PipecatVoice-Bridging-Header.h";
+				"HEADER_SEARCH_PATHS" = ("$(inherited)", "$(PIPECAT_PHONON_HEADER_PATH)");
+				"GCC_PREPROCESSOR_DEFINITIONS" = ("$(inherited)", "$(PIPECAT_PHONON_C_DEFINITION)");
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = ("$(inherited)", "$(PIPECAT_PHONON_SWIFT_CONDITION)");
+				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = ("$(inherited)", "$(SRCROOT)/.build/rust/aarch64-apple-ios/release");
+				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = ("$(inherited)", "$(SRCROOT)/.build/rust/aarch64-apple-ios-sim/release");
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"OTHER_LDFLAGS" = ("$(inherited)", "$(PIPECAT_PHONON_LDFLAGS)", "-lc++", "-liconv", "-lresolv", "-framework", "Security", "-framework", "NaturalLanguage", "-framework", "SoundAnalysis");
+				"CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER" = "NO";
+				"MARKETING_VERSION" = "0.1.0";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"DEVELOPMENT_TEAM" = "T2S6FJ6R3Q";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"GCC_OPTIMIZATION_LEVEL" = "s";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
 			};
-			name = Debug;
+			"baseConfigurationReference" = "D3ABCD00AA259FE2DA299E51";
 		};
-		DD75E2CB1C510A828AC72D96 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = T2S6FJ6R3Q;
-				GCC_OPTIMIZATION_LEVEL = s;
-				GENERATE_INFOPLIST_FILE = NO;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/native/phonon-ffi/include",
-				);
-				INFOPLIST_FILE = src/ios/PipecatVoice/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"$(SRCROOT)/.build/rust/aarch64-apple-ios/release",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"$(SRCROOT)/.build/rust/aarch64-apple-ios-sim/release",
-				);
-				MARKETING_VERSION = 0.1.0;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lphonon_ffi",
-					"-lc++",
-					"-liconv",
-					"-lresolv",
-					"-framework",
-					Security,
-					"-framework",
-					NaturalLanguage,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = ai.pipecat.voice;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = "src/ios/PipecatVoice/PipecatVoice-Bridging-Header.h";
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				TARGETED_DEVICE_FAMILY = "1,2";
+		"1B672BF3DA427763BF644BE3" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("6C7EFF6369083C8E1F2B1994", "DD75E2CB1C510A828AC72D96");
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"34A04005BCAF206EEC990BD9" = {
+			"isa" = "PBXNativeTarget";
+			"name" = "PipecatVoice";
+			"productName" = "PipecatVoice";
+			"productType" = "com.apple.product-type.application";
+			"productReference" = "A8792157CB4F27FB949C035F";
+			"buildConfigurationList" = "1B672BF3DA427763BF644BE3";
+			"buildPhases" = ("D626F04DF571B9BB2451CBFE", "8A7588AD5FA397C62F95C6FE", "5C2473E515024614E403B8B9", "91333E0C5CD1BAC2177B8AB3", "6B3E090DB545F4D7E323DB6E");
+			"buildRules" = ();
+			"dependencies" = ();
+			"packageProductDependencies" = ("20E73971D361D8889C8CC8DE");
+		};
+		"73EBF6644258C120893E685D" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"SDKROOT" = "iphoneos";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "26.0";
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "targeted";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = ("$(inherited)", "DEBUG");
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"GCC_OPTIMIZATION_LEVEL" = "0";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
 			};
-			name = Release;
 		};
-/* End XCBuildConfiguration section */
-
-/* Begin XCConfigurationList section */
-		1B672BF3DA427763BF644BE3 /* Build configuration list for PBXNativeTarget "PipecatVoice" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				6C7EFF6369083C8E1F2B1994 /* Debug */,
-				DD75E2CB1C510A828AC72D96 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+		"0B0C687DF8B6B8DC790B519C" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+			"buildSettings" = {
+				"ARCHS" = "arm64";
+				"SDKROOT" = "iphoneos";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "26.0";
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
+				"SWIFT_STRICT_CONCURRENCY" = "targeted";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"GCC_OPTIMIZATION_LEVEL" = "s";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
 		};
-		76F8DEC3DFE0BDB465198890 /* Build configuration list for PBXProject "PipecatVoice" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				73EBF6644258C120893E685D /* Debug */,
-				0B0C687DF8B6B8DC790B519C /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+		"76F8DEC3DFE0BDB465198890" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("73EBF6644258C120893E685D", "0B0C687DF8B6B8DC790B519C");
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
 		};
-/* End XCConfigurationList section */
+		"244210E48437B6556980A702" = {
+			"isa" = "PBXProject";
+			"buildConfigurationList" = "76F8DEC3DFE0BDB465198890";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = 0;
+			"knownRegions" = ("en", "Base");
+			"mainGroup" = "C69913C7EE4DFDD011BE172F";
+			"productRefGroup" = "0A3E27B8CA818264D75C8D81";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = ("34A04005BCAF206EEC990BD9");
+			"packageReferences" = ("08AEB2DD89524F1E9600F4EB");
+			"attributes" = {
+				"LastUpgradeCheck" = "2600";
+				"BuildIndependentTargetsInParallel" = "YES";
+			};
+		};
 	};
-	rootObject = 244210E48437B6556980A702 /* Project object */;
+	"rootObject" = "244210E48437B6556980A702";
 }
