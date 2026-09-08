@@ -249,6 +249,7 @@ private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var configuration: VoiceConfiguration
     @State private var key = ""
+    @State private var hasLoadedKey = false
     @State private var error: String?
 
     init(model: ConversationModel) {
@@ -331,7 +332,10 @@ private struct SettingsView: View {
 
     private func loadPrivateKey() {
         #if ENABLE_PHONON
-        if provider == .phonon { key = VoiceSettings.loadKey() }
+        if provider == .phonon && !hasLoadedKey {
+            key = VoiceSettings.loadKey()
+            hasLoadedKey = true
+        }
         #endif
     }
 }

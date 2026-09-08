@@ -12,7 +12,7 @@ quiet speech and pauses stay visibly quieter.
 Chat bubbles distinguish live transcription, composing replies, and final text;
 inline markers preserve interruptions. Native glass controls, light/dark
 appearance, Dynamic Type, VoiceOver, and Reduce Motion are supported. Capture and
-playback share a voice-processing audio engine for echo cancellation.
+playback share one audio engine with Apple's echo cancellation.
 
 See [validation](docs/validation.md) for build and runtime checks and the
 remaining acoustic tests on a physical iPhone.
@@ -75,7 +75,10 @@ backgrounding the app cancels generation and playback and stops the audio sessio
 Apple SoundAnalysis supplies acoustic speech confidence from 0.5-second windows
 at 0.1-second intervals. Pipecat applies confidence `0.65`, start duration `0.1`
 seconds, and stop duration `0.6` seconds. These settings live in `bot.py` and
-provide acoustic endpointing. Final ASR results are drained before the LLM starts;
+provide acoustic endpointing. A new user turn also requires a word from Apple's
+speech recognizer, so acoustic noise alone cannot interrupt the bot. A single
+word such as "stop" is enough; interruption latency includes the time it takes
+ASR to recognize it. Final ASR results are drained before the LLM starts;
 capture and VAD continue during that handoff.
 
 Audio stays native. The Python pipeline receives transcripts, VAD confidence,
@@ -89,6 +92,26 @@ Provider failures are surfaced without a cloud or system-TTS fallback. The app i
 currently English-only. Speakerphone echo rejection and latency require testing
 on a physical iPhone.
 
+## Control Center screen recording
+
+The app prefers a `.playAndRecord` / `.default` audio session with Apple's
+[echo-cancelled input](https://developer.apple.com/documentation/avfaudio/avaudiosession/setprefersechocancelledinput(_:))
+on supported devices and routes. This avoids the voice-chat processing that can
+change the sound of synthesized speech. It falls back to voice processing when
+the system cannot provide echo cancellation through the default session.
+
+To check bot audio capture, start a recording from Control Center with its
+microphone **off**, return to the app, and play a reply. Stop the recording and
+listen to the saved video in Photos. This checks app audio directly. Separately
+try the recording microphone **on** if you want your own voice in the video.
+The app's microphone button controls speech recognition, independently of that
+recording setting.
+
+Control Center capture and simultaneous microphone access need a physical-device
+check; a successful Simulator build does not verify them. If iOS interrupts the
+audio session or a route change removes echo cancellation, the conversation
+stops so you can restart it with the new route.
+
 ## Development
 
 The bot configuration is in `src/python/mobile_app/bot.py`:
@@ -98,14 +121,13 @@ transport.input() → stt → context_aggregator.user() → llm
                   → tts → transport.output() → context_aggregator.assistant()
 ```
 
-The bot imports concrete Apple TTS services:
+The bot imports the native PocketTTS service:
 
 ```python
 from pipecat.services.apple.pocket_tts import PocketTTSService
-from pipecat.services.apple.phonon import PhononTTSService
 ```
 
-Both extend `AppleNativeTTSService` in `pipecat.services.apple.tts`, which shares
+It extends `AppleNativeTTSService` in `pipecat.services.apple.tts`, which shares
 the Apple/iOS playback integration with Pipecat's `TTSService`. A standard
 `ServiceSwitcher` selects the provider sent by the existing native settings UI
 in `start.provider` before each conversation. Swift prepares that provider and

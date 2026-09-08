@@ -52,7 +52,7 @@ struct BotVoiceOrb: View {
             case .settling:
                 guard motion.running else { return }
                 motion.retarget(0, speaking: false, running: true)
-                do { try await Task.sleep(for: .seconds(1.2)) }
+                do { try await Task.sleep(for: .seconds(1.5)) }
                 catch { return } // A new reply cancels the previous release.
                 motion.retarget(0, speaking: false, running: false)
             case .suspended:
@@ -80,7 +80,7 @@ private struct OrbMotion {
     private var phase = 1.8
     private var initialEnergy = 0.0
     private var target = 0.0
-    private var response = 0.045
+    private var response = 0.07
     private var initialActivity = 0.0
     private var targetActivity = 0.0
     private(set) var running = false
@@ -105,7 +105,7 @@ private struct OrbMotion {
         target = energy
         initialActivity = running ? current.activity : 0
         targetActivity = speaking ? 1 : 0
-        response = energy > current.energy ? 0.045 : 0.18
+        response = energy > current.energy ? 0.07 : 0.26
         anchor = date
         self.running = running
     }

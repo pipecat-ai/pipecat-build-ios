@@ -147,9 +147,16 @@ final class ConversationModel {
             }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification,
             object: nil, queue: .main) { [weak self] notification in
-                guard let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-                      AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
-                Task { @MainActor in self?.stop() }
+                guard let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt else { return }
+                MainActor.assumeIsolated {
+                    guard let self, self.active else { return }
+                    if let message = self.audio.routeChangeError() {
+                        self.fail(message)
+                    } else if let reason = AVAudioSession.RouteChangeReason(rawValue: raw),
+                              reason == .oldDeviceUnavailable || reason == .newDeviceAvailable {
+                        self.fail("The audio device changed. Restart the conversation to use the current route.")
+                    }
+                }
             }
     }
 
@@ -206,10 +213,7 @@ final class ConversationModel {
             do {
                 try Task.checkCancellation()
                 guard active, sessionGeneration == generation else { return }
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playAndRecord, mode: .voiceChat,
-                                        options: [.defaultToSpeaker, .allowBluetoothHFP])
-                try session.setActive(true)
+                try audio.configureSession()
                 let synthesizer = try synthesizerFactory(provider)
                 self.synthesizer = synthesizer
                 try await synthesizer.prepare(voice: voice)
@@ -319,7 +323,6 @@ final class ConversationModel {
             await previousCapture?.value
             await speech.stop()
             audio.stop()
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             await previousPreparation?.value
             await previousSynthesizer?.unload()
         }
@@ -405,7 +408,8 @@ final class ConversationModel {
                   event.turn == currentTurn else { return }
             if event.state == "listening" { phase = muted ? .muted : .listening }
         case "request":
-            guard active, event.turn == currentTurn, event.session == sessionGeneration.uuidString else {
+            let validTurn = event.operation == "finalize_asr" || (event.turn != nil && event.turn == currentTurn)
+            guard active, validTurn, event.session == sessionGeneration.uuidString else {
                 if let id = event.request { send(["type": "result", "request": id, "error": "Turn was cancelled"]) }
                 return
             }
@@ -427,7 +431,12 @@ final class ConversationModel {
         }
         guard event.turn == currentTurn else { return }
         switch event.message.type {
-        case "user-started-speaking", "vad-user-started-speaking":
+        case "vad-user-started-speaking":
+            guard !muted, inputReady else { return }
+            // Acoustic activity alone must not interrupt a reply or change its
+            // phase. Pipecat confirms the user turn once ASR recognizes words.
+            setSpeaking(role: "user", speaking: true)
+        case "user-started-speaking":
             guard !muted, inputReady else { return }
             setSpeaking(role: "user", speaking: true)
             phase = .listening
@@ -474,7 +483,9 @@ final class ConversationModel {
     }
 
     private func perform(_ event: NativeEvent) {
-        guard let id = event.request, let turn = event.turn else { return }
+        guard let id = event.request else { return }
+        let turn = event.turn
+        let isFinalization = event.operation == "finalize_asr"
         let generation = sessionGeneration
         requests[id] = Task {
             defer {
@@ -483,7 +494,8 @@ final class ConversationModel {
             }
             do {
                 try Task.checkCancellation()
-                guard active, sessionGeneration == generation, currentTurn == turn else { throw CancellationError() }
+                guard active, sessionGeneration == generation,
+                      isFinalization || (turn != nil && currentTurn == turn) else { throw CancellationError() }
                 switch event.operation {
                 case "generate":
                     phase = .thinking
@@ -522,11 +534,13 @@ final class ConversationModel {
                 default: throw VoiceError(message: "Unknown native operation.")
                 }
                 try Task.checkCancellation()
-                guard active, sessionGeneration == generation, currentTurn == turn else { throw CancellationError() }
+                guard active, sessionGeneration == generation,
+                      isFinalization || (turn != nil && currentTurn == turn) else { throw CancellationError() }
                 send(["type": "result", "request": id, "done": true])
             } catch is CancellationError { }
             catch {
-                if active, sessionGeneration == generation, currentTurn == turn {
+                if active, sessionGeneration == generation,
+                   isFinalization || (turn != nil && currentTurn == turn) {
                     send(["type": "result", "request": id, "error": error.localizedDescription])
                 }
             }

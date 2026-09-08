@@ -1,5 +1,56 @@
 # Validation
 
+## September 8, 2026: speech-confirmed interruptions and audio routing
+
+New turns now require native acoustic activity and a recognized ASR word.
+Tests cover noise during LLM generation, bot playback, and sentence gaps;
+one-word interruptions; early, stale, and delayed transcripts; resumed speech;
+and stale endpoint acknowledgments. Native transcripts and endpoint acknowledgments
+use Pipecat's `UninterruptibleFrame` semantics so the interruption they trigger
+cannot discard the user's remaining words. Session and input-generation checks
+still reject old events. The affected app/mobile checks (69 cases) and related
+Pipecat bridge, playback, and turn checks (75 cases) passed.
+
+The native finalization regression uses the actual `AppleSpeechRecognizer` with
+file-backed capture and a deterministic pause after the first ASR input closes.
+It cancels that endpoint's caller, retains the next 3.28-second utterance, then
+requests a second endpoint before releasing the first rotation. The second
+endpoint waits for its own final results, including the trailing words. A third
+utterance also succeeds. Final timestamps span 0–3.2793125, 3.2793125–6.5593125,
+and 6.5593125–9.8393125 seconds; all 231 capture buffers arrive and VAD continues.
+The probe and generator are `.build/probe_native_finalization.swift` and
+`.build/create_finalization_probe.py`. The local speech service required execution
+outside the filesystem sandbox; the probe does not open a microphone.
+
+`VoiceAudioEngine` now prefers verified native echo-cancelled input in default
+mode and retains VoiceProcessingIO when unavailable. Session setup is shared by
+the app and PocketTTS diagnostic. Route changes that remove AEC or change the
+capture format stop the conversation with a restart message. DEBUG logs include
+the chosen path, session mode, capability state, routes, and sample rate.
+Both iPhone and Simulator Debug builds passed, and their bundled Apple services
+match the final Python source. The Simulator diagnostic selected the
+VoiceProcessingIO fallback and completed local PocketTTS load, playback,
+cancellation, restart, and continuous capture. It produced 3.12 seconds of audio
+in 9.24 seconds, confirming Simulator undersupply; this is not an iPhone timing
+result. Logs are `.build/voice-audio-device-build.log`,
+`.build/voice-audio-simulator-build.log`, and
+`.build/voice-audio-simulator-runtime.log`.
+The verified device build was installed successfully on the connected iPhone;
+`.build/voice-audio-device-install.log` records installation. The phone remained
+locked, so the app was not launched there for the acoustic/recording checks.
+
+The actual PCM player passed native playback/cancellation checks. A streamed
+six-chunk probe preserved all samples exactly; deliberately late chunks produced
+the expected silence gaps. No playback buffering changes were made on the basis
+of Simulator inference speed.
+
+**Still requires an iPhone:** Control Center recording with its microphone off
+and on, native-input AEC selection, speakerphone echo rejection, route changes,
+and PocketTTS production/playback timing. The connected iPhone was locked during
+these checks. The default-mode change is a candidate fix for recording compatibility,
+not a verified Control Center recording result. Follow the recording steps in
+the [README](../README.md#control-center-screen-recording).
+
 ## September 8, 2026: voice conversation interface
 
 The conversation screen now uses independent user and bot audio levels. Native
@@ -22,7 +73,14 @@ expansion, ribbon separation, brightness, and motion speed. `PCMPlayer` now
 schedules contiguous 20 ms windows and emits each level after playback, replacing
 the average reported when an entire synthesis chunk was queued. A fixed decibel
 range retains gain differences. The orb follows native playback activity directly
-and uses a 45 ms attack / 180 ms release envelope.
+and uses a 70 ms attack / 260 ms release envelope.
+
+The softer visual pass uses pearl blue and periwinkle throughout, with
+translucent folds and tapered curls around the edge. Audio energy bends the
+volume and its edge wisps together, and pulls the curls farther apart on louder
+syllables. It keeps the same playback meter. Simulator builds, iPhone shader
+compilation, and the motion continuity/release probe passed. Light/dark GPU
+renders and a recorded-speech Simulator preview are in `.build/wisp-review/`.
 
 `tests/test_audio_playback.py` exercises the actual player with an offline
 AVAudioEngine: sample continuity (including a short final window), no premature

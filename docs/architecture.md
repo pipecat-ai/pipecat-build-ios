@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-    Mic[Microphone] --> Audio[Shared voice-processing AVAudioEngine]
+    Mic[Microphone] --> Audio[Shared echo-cancelled AVAudioEngine]
     Audio --> ASR[Apple SpeechAnalyzer]
     Audio --> VAD[Apple SoundAnalysis]
     ASR -->|partial and final text| Python[Pipecat Python pipeline]
@@ -95,14 +95,24 @@ rejects duplicate or out-of-order score timestamps. `bot.py` sets confidence to
 volume to zero. The classifier window contributes detection latency in addition
 to these debounce durations; they are not a promise of 100 ms interruptions.
 
-`AppleSpeechSTTService` converts confirmed activity into
+`AppleSpeechSTTService` converts acoustic activity into
 `VADUserStartedSpeakingFrame`/`VADUserStoppedSpeakingFrame` and proposes turn
 boundaries with `ProposedUserStartedSpeakingFrame`/`ProposedUserStoppedSpeakingFrame`.
 `ExternalUserTurnStrategies` in the standard user aggregator accepts those
 boundaries and produces the usual user speech and interruption frames. Acoustic
 speech-stop and completed-user-turn events are distinct: the service waits for
-final ASR text before proposing the end of the turn. ASR results arriving before
-the first classifier window are buffered until speech starts.
+final ASR text before proposing the end of the turn.
+
+A new turn requires both acoustic activity and at least one word in an interim
+or final Apple transcript. Until then, VAD is only a candidate: it cannot create
+a native turn ID, cancel playback, or interrupt Pipecat. This applies throughout
+generation and playback, including gaps between TTS sentences. A single word
+such as "stop" remains sufficient. ASR results arriving before the first
+classifier window are buffered. An acoustic span without text still finalizes
+ASR when it ends, allowing a delayed final result to confirm a short utterance.
+If that produces no words, it leaves the current bot reply intact. This trades
+some interruption latency for resistance to noise-only classifier spikes;
+background speech or an incorrect ASR hypothesis can still count as speech.
 
 Apple's [`finalize(through:)`](https://developer.apple.com/documentation/speech/speechanalyzer/finalize(through:))
 publishes final results without guaranteeing that the application has consumed
@@ -118,10 +128,22 @@ finishes even if resumed speech cancels the requesting Python endpoint task.
 ## Playback, interruptions, and RTVI
 
 `VoiceAudioEngine` owns one `AVAudioEngine` for capture and the native PCM player.
-The audio session uses `.playAndRecord` and `.voiceChat`, and the input node enables
-voice processing before capture starts. The shared output supplies Apple's echo
-cancellation reference, allowing microphone capture to continue during generation
-and playback. Stopping a reply stops the player node rather than the engine;
+The audio session first tries `.playAndRecord` and `.default` with Apple's
+[`setPrefersEchoCancelledInput(true)`](https://developer.apple.com/documentation/avfaudio/avaudiosession/setprefersechocancelledinput(_:)).
+The ordinary engine is used only after the activated session reports echo
+cancellation enabled. Unsupported devices or routes fall back to `.voiceChat`
+and VoiceProcessingIO. Apple describes the default-mode option as suitable for
+a wider range of audio; voice-chat mode applies speech-oriented tonal processing.
+Both paths keep capture active during generation and playback. A route change
+that removes the selected echo cancellation stops the conversation rather than
+continuing with speaker echo fed into ASR.
+
+This default-mode path also permits checking ordinary app-audio capture with
+Control Center Screen Recording. There is no app-side switch that guarantees
+Control Center will record a session; device capture must be tested separately
+with the recording microphone off and on. No ReplayKit recording UI is added.
+
+Stopping a reply stops the player node rather than the engine;
 ending the session stops both. Muting removes capture and cancels ASR, then starts
 a fresh input generation on unmute so delayed results cannot transcribe muted
 audio.

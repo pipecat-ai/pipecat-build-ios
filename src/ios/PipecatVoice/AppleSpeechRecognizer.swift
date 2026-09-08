@@ -360,15 +360,26 @@ final class AppleSpeechRecognizer {
         if let time, !time.isFinite || time < 0 {
             throw VoiceError(message: "The requested speech finalization time is invalid.")
         }
-        if let finalizationTask { try await finalizationTask.value; return }
+        let generation = epoch
+        // An earlier endpoint may still be rotating ASR after resumed speech
+        // cancelled its request. Its replacement contains newer audio; this
+        // endpoint must finalize that audio too before acknowledging the turn.
+        while let finalizationTask {
+            try await finalizationTask.value
+            try Task.checkCancellation()
+            guard epoch == generation else { throw CancellationError() }
+        }
+        try Task.checkCancellation()
         guard let capture, let previous = session, let format, let locale else {
             throw CancellationError()
         }
-        let generation = epoch
         // This unstructured task survives cancellation of the Python request that
         // asked for finalization, so resumed user speech cannot strand capture.
         let task = Task { [weak self] in
             guard let self else { throw CancellationError() }
+            // Clear ownership before awaiting callers resume. An older caller
+            // must never clear a newer rotation's task after it has started.
+            defer { if self.epoch == generation { self.finalizationTask = nil } }
             let transcriber = SpeechTranscriber(locale: locale, preset: .timeIndexedProgressiveTranscription)
             let replacement = try await self.makeSession(transcriber: transcriber, format: format, generation: generation)
             do {
@@ -387,13 +398,7 @@ final class AppleSpeechRecognizer {
             }
         }
         finalizationTask = task
-        do {
-            try await task.value
-            if epoch == generation { finalizationTask = nil }
-        } catch {
-            if epoch == generation { finalizationTask = nil }
-            throw error
-        }
+        try await task.value
     }
 
     /// Muted audio is never submitted to ASR. A fresh generation on unmute also

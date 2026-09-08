@@ -74,6 +74,9 @@ async def check_native_turn():
         await bridge.receive({'type': 'start', 'session': 'mobile-imports'})
         await bridge.receive({'type': 'vad', 'confidence': .95, 'volume': 1,
                               'time': .1, 'session': 'mobile-imports'})
+        await bridge.receive({'type': 'transcription', 'text': 'Say',
+                              'final': False, 'start': .1, 'end': .1,
+                              'session': 'mobile-imports'})
         await wait(lambda e: e.get('message', {}).get('type') == 'user-started-speaking')
         for index in range(6):
             await bridge.receive({'type': 'vad', 'confidence': 0, 'volume': 1,

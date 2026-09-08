@@ -31,22 +31,13 @@ float2 orbRotate(float2 p, float angle) {
 }
 
 float3 orbTint(float3 p, float time) {
-    float cyan = exp(-2.4 * dot(p.xy - float2(-0.38, 0.12), p.xy - float2(-0.38, 0.12)));
-    float rose = exp(-2.8 * dot(p.xy - float2(0.38, -0.20), p.xy - float2(0.38, -0.20)));
-    float violet = 0.38 + 0.15 * sin(p.z * 3.0 + time * 0.18);
-    return (float3(0.08, 0.82, 1.0) * cyan
-            + float3(1.0, 0.10, 0.44) * rose
-            + float3(0.38, 0.20, 1.0) * violet) / (cyan + rose + violet);
-}
-
-float3 auraTint(float angle) {
-    // Cyan, periwinkle, fuchsia and a small warm highlight travel around the rim.
-    float3 color = 0.55 + 0.45 * cos(angle + float3(0.0, 2.1, 4.2));
-    return mix(color, float3(0.34, 0.48, 1.0), 0.12);
+    // A close family of blue and periwinkle, with pearl light in the folds.
+    float blend = 0.5 + 0.5 * sin(p.x * 2.1 + p.y * 1.5 + p.z * 1.8 + time * 0.10);
+    return mix(float3(0.20, 0.46, 0.88), float3(0.46, 0.40, 0.78), blend);
 }
 }
 
-/// A breathing aura of interwoven light, with translucent folds inside the ring.
+/// A breathing volume of translucent silk, feathering into loose outer wisps.
 /// SwiftUI supplies a continuous local clock and a smoothed bot-only envelope.
 [[ stitchable ]] half4 botVoiceWisps(float2 position, float2 size, float time,
                                     float energy, float darkAppearance) {
@@ -56,90 +47,88 @@ float3 auraTint(float angle) {
     if (edge <= 0.0) { return half4(0); }
     float angle = atan2(uv.y, uv.x);
     float expansion = 0.81 + energy * 0.19;
-    float2 volumeUV = uv / expansion;
+    // Two broad lobes flex the whole volume with each syllable. The outer wisps
+    // share this deformation so their edges feel attached to the moving cloud.
+    float flex = energy * (sin(angle * 2.0 + time * 0.27) * 0.13
+        + sin(angle * 3.0 - time * 0.19) * 0.055);
+    float2 volumeUV = uv / (expansion * (1.0 + flex));
     float radius = length(volumeUV);
 
-    float3 haloTint = auraTint(angle - time * 0.35);
-    float halo = exp(-pow((radius - 0.73) * 5.4, 2.0)) * edge
-        * mix(0.12, 0.20, darkAppearance) * (0.55 + energy * 1.4);
+    float3 haloTint = float3(0.40, 0.49, 0.85);
+    float halo = exp(-pow((radius - 0.48) * 3.2, 2.0)) * edge
+        * mix(0.10, 0.15, darkAppearance) * (0.60 + energy * 1.2);
     float3 output = haloTint * halo;
     float alpha = halo;
 
     const float sphereRadius = 0.79;
     if (radius < sphereRadius) {
         float depth = sqrt(max(0.0, sphereRadius * sphereRadius - radius * radius));
-        const int steps = 40;
+        const int steps = 48;
         float stepSize = depth * 2.0 / float(steps);
         float3 light = float3(0);
         float transmission = 1.0;
-        float3 drift = float3(time * 0.16, -time * 0.19, time * 0.12);
+        float3 drift = float3(time * 0.09, -time * 0.11, time * 0.07);
 
         for (int index = 0; index < steps; ++index) {
             float3 p = float3(volumeUV, depth - (float(index) + 0.5) * stepSize);
-            float envelope = 1.0 - smoothstep(0.50, sphereRadius, length(p));
-            p.xz = orbRotate(p.xz, time * 0.23);
-            p.xy = orbRotate(p.xy, time * 0.16 + sin(time * 0.29) * 0.24);
-            float3 q = p + sin(p.yzx * 3.3 + drift) * (0.10 + energy * 0.16);
-            float turbulence = orbTurbulence(q * 3.1 + drift);
+            float envelope = 1.0 - smoothstep(0.46, sphereRadius, length(p));
+            p.xz = orbRotate(p.xz, time * 0.16 + p.y * 0.35);
+            p.xy = orbRotate(p.xy, time * 0.11 + sin(time * 0.19) * 0.24);
+            float3 q = p + sin(p.yzx * 3.0 + drift) * (0.11 + energy * 0.09);
+            float turbulence = orbTurbulence(q * 2.7 + drift * 0.8);
 
             // Narrow luminous folds sit inside wider, almost transparent veils.
-            float fold = q.y + sin(q.x * 3.0 + time * 0.24) * 0.30
-                + sin(q.z * 3.7 - time * 0.19) * 0.21 + (turbulence - 0.5) * 0.72;
-            float filament = fold + sin(q.x * 8.0 + q.z * 5.0 + turbulence * 6.0) * 0.045;
-            float curl = q.z * 0.65 - q.x * 0.55 + sin(q.y * 3.4 + time * 0.22) * 0.22
-                + (turbulence - 0.5) * 0.65;
-            float veil = exp2(-fold * fold * 35.0);
-            float strand = exp2(-filament * filament * 550.0);
-            float crossing = exp2(-curl * curl * 160.0);
-            float density = (veil * 0.18 + strand * 0.72 + crossing * 0.32 + 0.035)
-                * envelope * (0.42 + turbulence * 0.75);
+            float fold = q.y + sin(q.x * 3.0 + time * 0.16) * 0.30
+                + sin(q.z * 3.5 - time * 0.13) * 0.21 + (turbulence - 0.5) * 0.58;
+            float filament = fold + sin(q.x * 6.0 + q.z * 4.0 + turbulence * 4.0) * 0.033;
+            float curl = q.z * 0.65 - q.x * 0.5 + sin(q.y * 3.2 + time * 0.14) * 0.22
+                + (turbulence - 0.5) * 0.48;
+            float veil = exp2(-fold * fold * 55.0);
+            float strand = exp2(-filament * filament * 650.0);
+            float crossing = exp2(-curl * curl * 200.0);
+            float fibers = pow(0.5 + 0.5 * cos(fold * 65.0 + q.z * 3.0), 8.0) * veil;
+            float density = (veil * 0.10 + strand * 0.58 + crossing * 0.30 + fibers * 0.16 + 0.005)
+                * envelope * (0.60 + turbulence * 0.40);
             float opacity = 1.0 - exp(-density * stepSize * 4.2);
             float3 tint = orbTint(p, time);
-            tint = mix(tint, float3(0.78, 0.93, 1.0), strand * 0.35);
-            light += transmission * tint * opacity * (0.95 + energy * 1.50);
+            tint = mix(tint, float3(0.78, 0.88, 1.0), strand * 0.45);
+            light += transmission * tint * opacity * (0.85 + energy * 1.15);
             transmission *= 1.0 - opacity;
         }
 
-        float mistBoundary = 1.0 - smoothstep(0.38, sphereRadius, radius);
-        float litBoundary = 1.0 - smoothstep(0.62, sphereRadius, radius);
-        float body = mix(mistBoundary, litBoundary, min(1.0, (1.0 - transmission) * 1.7));
-        float3 shade = mix(float3(0.035, 0.045, 0.12), float3(0.065, 0.09, 0.19),
-                           1.0 - smoothstep(-0.6, 0.6, volumeUV.y));
-        float3 color = shade + (1.0 - exp(-light * 2.5));
-        // A soft internal light replaces a shiny surface highlight and hard rim.
-        float bloom = exp(-dot(volumeUV + float2(0.08, 0.02), volumeUV + float2(0.08, 0.02)) * 8.0);
-        color += float3(0.16, 0.24, 0.33) * bloom * (1.0 - transmission) * 0.3;
+        // Density defines the silhouette, leaving air between the folded veils.
+        float body = 1.0 - pow(transmission, 2.2);
+        float3 color = float3(0.06, 0.15, 0.34) + (1.0 - exp(-light * 3.0));
         color = min(color, float3(1.0));
         output = color * body + output * (1.0 - body);
         alpha = body + alpha * (1.0 - body);
     }
 
-    // Soft ribbons peel away from one another on louder syllables. All radial
-    // motion is driven by audio energy; time only carries the flowing light.
-    float auraRadius = 0.64 + energy * 0.135;
-    float ripple = 0.007 + energy * 0.032;
+    // Loose, tapered curls dissolve into the volume. Each is only a partial arc,
+    // so the aura has an airy circular silhouette without a continuous outline.
+    float auraRadius = 0.56 + energy * 0.13;
     float3 auraLight = float3(0);
     float auraDensity = 0.0;
-    for (int ribbon = 0; ribbon < 4; ++ribbon) {
-        float offset = float(ribbon) * 1.5707963;
-        float wave = sin(angle * 3.0 + time * 0.85 + offset) * 0.60
-            + sin(angle * 5.0 - time * 0.63 + offset * 1.7) * 0.28
-            + sin(angle * 2.0 - time * 0.41 + offset) * 0.30;
-        float ring = auraRadius + wave * ripple
-            + (float(ribbon) - 1.5) * (0.006 + energy * 0.010);
-        float distance = screenRadius - ring;
-        float width = 0.008 + energy * 0.008;
+    for (int wisp = 0; wisp < 3; ++wisp) {
+        float offset = float(wisp) * 2.0943951;
+        float travel = angle - time * 0.18 + offset;
+        float taper = pow(0.5 + 0.5 * cos(travel), 3.0);
+        float bend = sin(angle * 2.0 + time * 0.16 + offset) * (0.020 + energy * 0.065)
+            + sin(angle * 3.0 - time * 0.12 + offset) * (0.01 + energy * 0.025);
+        float contour = auraRadius * (1.0 + flex) + bend
+            - float(wisp) * (0.025 + energy * 0.045);
+        float distance = screenRadius - contour;
+        float width = 0.009 + taper * 0.012 + energy * 0.007;
         float filament = exp(-pow(distance / width, 2.0));
-        float veil = exp(-pow(distance / (width * 4.5), 2.0));
-        float highlight = 0.55 + 0.45 * sin(angle * 2.0 + time * 0.9 + offset);
-        float density = (filament * 0.55 + veil * 0.16)
-            * (0.35 + energy * 0.85) * highlight;
-        float3 tint = auraTint(angle - time * 0.35 + offset * 0.32);
-        tint = mix(tint, float3(0.78, 0.94, 1.0), filament * highlight * energy * 0.48);
+        float veil = exp(-pow(distance / (width * 3.8), 2.0));
+        float density = (filament * 0.70 + veil * 0.22)
+            * (0.35 + energy * 0.95) * taper;
+        float3 tint = mix(float3(0.18, 0.40, 0.82), float3(0.46, 0.48, 0.84), float(wisp) * 0.35);
+        tint = mix(tint, float3(0.78, 0.87, 1.0), filament * taper * 0.50);
         auraLight += tint * density;
         auraDensity += density;
     }
-    float auraAlpha = (1.0 - exp(-auraDensity * 2.8)) * edge;
+    float auraAlpha = (1.0 - exp(-auraDensity * 2.0)) * edge;
     float3 auraColor = auraLight / max(0.0001, auraDensity);
     output = auraColor * auraAlpha + output * (1.0 - auraAlpha);
     alpha = auraAlpha + alpha * (1.0 - auraAlpha);

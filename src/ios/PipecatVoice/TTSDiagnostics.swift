@@ -43,9 +43,7 @@ enum TTSDiagnostics {
             let start = Date()
             try await synth.prepare(voice: "alba")
             report("POCKET_TTS_MODEL_LOADED: \(Date().timeIntervalSince(start))s")
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
-            try session.setActive(true)
+            try audio.configureSession()
             let capture = CaptureProbe()
             try audio.startCapture { _, _ in capture.received() }
             let url = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
@@ -103,7 +101,6 @@ enum TTSDiagnostics {
         await synth.unload()
         player.stop()
         audio.stop()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
 #endif

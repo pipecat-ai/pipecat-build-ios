@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.mark.skipif(
     sys.platform != "darwin" or not shutil.which("swiftc"), reason="macOS Swift SDK required"
 )
-def test_swift_settings_assets_and_cancellation(tmp_path):
+@pytest.mark.parametrize("enable_phonon", [False, True], ids=["public", "development"])
+def test_swift_settings_assets_and_cancellation(tmp_path, enable_phonon):
     sources = ROOT / "src/ios/PipecatVoice"
     binary = tmp_path / "tts-checks"
     subprocess.run(
@@ -22,6 +23,7 @@ def test_swift_settings_assets_and_cancellation(tmp_path):
             "-swift-version",
             "5",
             "-parse-as-library",
+            *(["-D", "ENABLE_PHONON"] if enable_phonon else []),
             "-module-cache-path",
             str(tmp_path / "ModuleCache"),
             str(sources / "SpeechSynthesizer.swift"),

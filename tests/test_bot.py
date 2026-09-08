@@ -48,9 +48,10 @@ class Host:
             }
         )
 
-    async def begin_speech(self, bridge):
+    async def begin_speech(self, bridge, *, text="Hello"):
         marker = len(self.events)
         await self.vad(bridge, 0.95)
+        await self.transcribe(bridge, text, start=self.time, final=False)
         await self.wait(lambda event: rtvi_type(event) == "user-started-speaking", after=marker)
         return marker, self.time
 
@@ -82,7 +83,7 @@ class Host:
         )
 
     async def say(self, bridge, text):
-        marker, start = await self.begin_speech(bridge)
+        marker, start = await self.begin_speech(bridge, text=text)
         await self.end_speech(bridge, text, start=start, after=marker)
         return await self.wait(lambda event: event.get("operation") == "generate", after=marker)
 
@@ -102,7 +103,7 @@ def rtvi_type(event):
 
 
 @asynccontextmanager
-async def session():
+async def session(*, provider="pocket-tts"):
     host = Host()
 
     # The native tokenizer is verified separately; this host models its boundary API.
@@ -117,7 +118,7 @@ async def session():
     task = asyncio.create_task(runner.run())
     try:
         await asyncio.wait_for(bridge.ready.wait(), 5)
-        await bridge.receive({"type": "start", "session": host.session})
+        await bridge.receive({"type": "start", "session": host.session, "provider": provider})
         yield bridge, host
     finally:
         await bridge.receive({"type": "stop", "session": host.session})
@@ -140,11 +141,14 @@ def assistant_messages(bridge):
     return [message for message in bridge.context.messages if message["role"] == "assistant"]
 
 
-async def test_real_turn_emits_rtvi_speech_events_and_waits_for_playback():
-    async with session() as (bridge, host):
+@pytest.mark.parametrize("provider", ["pocket-tts", "phonon"])
+async def test_real_turn_emits_rtvi_speech_events_and_waits_for_playback(provider):
+    async with session(provider=provider) as (bridge, host):
         request = await host.say(bridge, "Hello")
         assert request["prompt"] == "Hello"
         speech = await reply(bridge, host, request, "Hello there.")
+        assert speech["provider"] == provider
+        assert bridge.tts.strategy.active_service.provider_id == provider
         assert speech["text"] == "Hello there."
         assert assistant_messages(bridge) == []
         assert not any(rtvi_type(event) == "bot-started-speaking" for event in host.events)
@@ -176,6 +180,51 @@ async def test_real_turn_emits_rtvi_speech_events_and_waits_for_playback():
             < speech_types.index("user-stopped-speaking")
             < speech_types.index("bot-started-speaking")
             < speech_types.index("bot-stopped-speaking")
+        )
+
+
+@pytest.mark.parametrize("first,second", [("pocket-tts", "phonon"), ("phonon", "pocket-tts")])
+async def test_provider_switch_cancels_old_speech_and_routes_the_next_conversation(first, second):
+    async with session(provider=first) as (bridge, host):
+        request = await host.say(bridge, "Old question")
+        old_speech = await reply(bridge, host, request, "Unfinished answer.")
+        assert old_speech["provider"] == first
+        await host.playback(bridge, old_speech, speaking=True)
+        marker = len(host.events)
+        await bridge.receive({"type": "stop", "session": host.session})
+        host.session = "replacement-session"
+        host.time = 0.0
+        await bridge.receive({"type": "start", "session": host.session, "provider": second})
+        await host.wait(
+            lambda event: (
+                event.get("type") == "cancel_request"
+                and event.get("request") == old_speech["request"]
+            ),
+            after=marker,
+        )
+        await respond(bridge, old_speech, done=True)
+        following = await host.say(bridge, "New question")
+        new_speech = await reply(bridge, host, following, "The selected voice answers.")
+        assert new_speech["provider"] == second
+        assert new_speech["session"] == host.session
+        assert new_speech["turn"] != old_speech["turn"]
+        assert bridge.tts.strategy.active_service.provider_id == second
+        await host.playback(bridge, new_speech, speaking=True)
+        await host.playback(bridge, new_speech, speaking=False)
+        await respond(bridge, new_speech, done=True)
+        await host.wait(
+            lambda event: (
+                event.get("state") == "listening" and event.get("session") == host.session
+            ),
+            after=marker,
+        )
+        assert assistant_messages(bridge) == [
+            {"role": "assistant", "content": "The selected voice answers."}
+        ]
+        assert all(
+            event.get("provider") == second
+            for event in host.events[marker:]
+            if event.get("operation") == "speak"
         )
 
 
@@ -274,15 +323,23 @@ async def test_empty_llm_response_reports_error_without_speech_or_assistant_cont
 
 async def test_vad_episode_without_transcript_does_not_trigger_generation():
     async with session() as (bridge, host):
-        marker, start = await host.begin_speech(bridge)
-        await host.end_speech(bridge, "", start=start, after=marker)
-        # A following valid endpoint acts as an ordering barrier for the empty turn.
+        marker = len(host.events)
+        await host.vad(bridge, 0.95)
+        for _ in range(6):
+            await host.vad(bridge, 0.05)
+        endpoint = await host.wait(
+            lambda event: event.get("operation") == "finalize_asr", after=marker
+        )
+        assert endpoint["turn"] is None
+        await respond(bridge, endpoint, done=True)
+        # A following valid endpoint is an ordering barrier for the acoustic span.
         request = await host.say(bridge, "An actual question")
         assert request["prompt"] == "An actual question"
         assert [
             event["prompt"] for event in host.events if event.get("operation") == "generate"
         ] == ["An actual question"]
         assert request["history"] == []
+        assert len([event for event in host.events if event.get("type") == "user_turn"]) == 1
 
 
 async def test_manual_send_waits_for_final_asr_result_instead_of_using_partial_text():
@@ -392,6 +449,7 @@ async def test_new_vad_start_waits_for_the_previous_queued_endpoint_to_close():
             next_marker = len(host.events)
             await host.vad(bridge, 0.95)
             next_start = host.time
+            await host.transcribe(bridge, "Second question", start=next_start, final=False)
             await asyncio.wait_for(next_vad_received.wait(), 5)
         finally:
             await user.resume_processing_frames()

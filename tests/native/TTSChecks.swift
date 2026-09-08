@@ -26,15 +26,29 @@ struct TTSChecks {
         let suite = "ai.pipecat.tests.\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
+        #if ENABLE_PHONON
+        try check(TTSProviderID.available == [.pocketTTS, .phonon], "Development provider is missing")
+        try check(TTSProviderID.phonon.voices.contains("Marlowe"), "Default development voice is missing")
+        // Exercise persisted preferences without accessing the host's actual Keychain.
+        try VoiceSettings.save(VoiceConfiguration(), defaults: defaults)
+        try check(VoiceSettings.validKey("gsk_" + String(repeating: "0", count: 64)), "Valid key format rejected")
+        try check(!VoiceSettings.validKey("gsk_short"), "Invalid key format accepted")
+        #else
         try check(TTSProviderID.available == [.pocketTTS], "Public build exposes a private provider")
+        #endif
         let fresh = VoiceSettings.load(defaults: defaults)
         try check(fresh.effectiveProvider == .pocketTTS, "Wrong default provider")
         try check(fresh.voice(for: .pocketTTS) == "alba", "Wrong default voice")
 
+        defaults.removePersistentDomain(forName: suite)
         defaults.set("Freya", forKey: "voice")
         var legacy = VoiceSettings.load(defaults: defaults)
         try check(legacy.provider == .phonon, "Legacy provider was lost")
+        #if ENABLE_PHONON
+        try check(legacy.effectiveProvider == .phonon, "Development build lost its selected provider")
+        #else
         try check(legacy.effectiveProvider == .pocketTTS, "Unavailable provider must fall back locally")
+        #endif
         try check(legacy.voice(for: .phonon) == "Freya", "Legacy voice was lost")
         try check(legacy.voice(for: .pocketTTS) == "alba", "Legacy voice leaked into another provider")
         try VoiceSettings.save(legacy, defaults: defaults)
