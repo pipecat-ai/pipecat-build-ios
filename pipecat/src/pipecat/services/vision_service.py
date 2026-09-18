@@ -1,0 +1,82 @@
+#
+# Copyright (c) 2024-2026, Daily
+#
+# SPDX-License-Identifier: BSD 2-Clause License
+#
+
+"""Vision service implementation.
+
+Provides base classes and implementations for computer vision services that can
+analyze images and generate textual descriptions or answers to questions about
+visual content.
+"""
+
+from abc import abstractmethod
+from collections.abc import AsyncGenerator
+
+from pipecat.frames.frames import Frame, UserImageRawFrame
+from pipecat.processors.frame_processor import FrameDirection
+from pipecat.services.ai_service import AIService
+from pipecat.services.settings import VisionSettings
+
+
+class VisionService(AIService):
+    """Base class for vision services.
+
+    Provides common functionality for vision services that process images and
+    generate textual responses. Handles image frame processing and integrates
+    with the AI service infrastructure for metrics and lifecycle management.
+    """
+
+    def __init__(self, *, settings: VisionSettings | None = None, **kwargs):
+        """Initialize the vision service.
+
+        Args:
+            settings: The runtime-updatable settings for the vision service.
+            **kwargs: Additional arguments passed to the parent AIService.
+        """
+        super().__init__(
+            settings=settings
+            # Here in case subclass doesn't implement more specific settings
+            # (which hopefully should be rare)
+            or VisionSettings(),
+            **kwargs,
+        )
+        self._describe_text = None
+
+    @abstractmethod
+    async def run_vision(self, frame: UserImageRawFrame) -> AsyncGenerator[Frame, None]:
+        """Process the given vision image and generate results.
+
+        This method must be implemented by subclasses to provide actual computer
+        vision functionality such as image description, object detection, or
+        visual question answering.
+
+        Args:
+            frame: The image frame to process.
+
+        Yields:
+            Frame: Frames containing the vision analysis results, typically TextFrame
+            objects with descriptions or answers.
+        """
+        raise NotImplementedError
+        yield  # pragma: no cover
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        """Process frames, handling vision image frames for analysis.
+
+        Automatically processes UserImageRawFrame objects by calling run_vision
+        and handles metrics tracking. Other frames are passed through unchanged.
+
+        Args:
+            frame: The frame to process.
+            direction: The direction of frame processing.
+        """
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, UserImageRawFrame) and frame.text:
+            await self.start_processing_metrics()
+            await self.process_generator(self.run_vision(frame))
+            await self.stop_processing_metrics()
+        else:
+            await self.push_frame(frame, direction)

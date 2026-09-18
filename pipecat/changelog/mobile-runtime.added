@@ -1,0 +1,3 @@
+Add mobile dependency groups and platform markers for native iOS/Android hosts.
+Core pipelines can load without the desktop audio, vision, or ONNX dependencies;
+audio resamplers, image conversion, and DTMF loading import their dependencies on use.

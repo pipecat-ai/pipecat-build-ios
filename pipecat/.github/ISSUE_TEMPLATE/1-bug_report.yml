@@ -1,0 +1,131 @@
+name: Bug report
+description: Report a bug or unexpected behavior
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report
+
+        Thank you for taking the time to fill out this bug report.
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Environment
+
+  - type: input
+    id: pipecat-version
+    attributes:
+      label: pipecat version
+      description: Which version are you using?
+      placeholder: e.g., 0.0.63
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Which Python version are you using?
+      placeholder: e.g., 3.12.8
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Which OS are you using?
+      placeholder: e.g., Ubuntu 24.04, Windows 11, macOS 12.5
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue description
+      description: Provide a clear description of the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: List the steps to reproduce the issue.
+      placeholder: |
+        1. Do this...
+        2. Then do that...
+        3. Observe the error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal-repro
+    attributes:
+      label: Minimal reproducible example
+      description: >
+        A small, runnable script that shows the bug: a single-file bot, or a test
+        using `run_test()` from `pipecat.tests.utils`. Reports without runnable code
+        get the `needs-repro` label and are closed after 30 days if none is provided.
+        If you truly can't reproduce it in code (e.g. it only happens on rare live
+        calls), say so here and include everything you have: logs, timestamps,
+        session IDs, and your pipeline setup.
+      render: python
+      placeholder: |
+        # A minimal bot or run_test() snippet that triggers the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra-evidence
+    attributes:
+      label: Eval scenario or recordings (optional)
+      description: >
+        Optional, but reports with these get looked at first. A failing
+        `pipecat eval` scenario YAML (see `src/pipecat/evals/`), and/or a link to an
+        audio recording that demonstrates the issue when the bug is audible
+        (interruptions, latency, garbled audio, wrong turn-taking).
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: If applicable, include any relevant logs or error messages
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: accountability
+    attributes:
+      label: Before you submit
+      description: >
+        AI tools are welcome for writing up a report, but a human must stand behind
+        it. See the "Filing Bug Reports" section in CONTRIBUTING.md.
+      options:
+        - label: I have personally reproduced this issue on the latest Pipecat release (or `main`).
+          required: true
+        - label: I have searched existing issues for this bug.
+          required: true
+        - label: If AI tools helped write this report, I have verified the behavior myself and will personally answer follow-up questions.
+          required: true

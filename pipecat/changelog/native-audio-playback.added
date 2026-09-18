@@ -1,0 +1,1 @@
+Added TTS support for externally acknowledged native audio playback and custom text aggregators, a configurable RTVI sentence matcher, and lazy optional audio dependencies for embedded runtimes.

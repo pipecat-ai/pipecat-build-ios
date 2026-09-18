@@ -1,0 +1,534 @@
+## Contributing to Pipecat
+
+**Want to add a new service integration?**
+We encourage community-maintained integrations! Please see our [Community Integration Guide](COMMUNITY_INTEGRATIONS.md) for the process and requirements.
+
+**Want to contribute to Pipecat core?**
+We welcome contributions of all kinds! Your help is appreciated. Follow these steps to get involved:
+
+1. **Fork this repository**: Start by forking the Pipecat Documentation repository to your GitHub account.
+
+2. **Clone the repository**: Clone your forked repository to your local machine.
+   ```bash
+   git clone https://github.com/your-username/pipecat
+   ```
+3. **Create a branch**: For your contribution, create a new branch.
+   ```bash
+   git checkout -b your-branch-name
+   ```
+4. **Make your changes**: Edit or add files as necessary.
+5. **Add a changelog entry**: Create a changelog fragment file (see [Changelog Entries](#changelog-entries) below).
+6. **Test your changes**: Ensure that your changes look correct and follow the style set in the codebase.
+7. **Commit your changes**: Once you're satisfied with your changes, commit them with a meaningful message.
+
+```bash
+git commit -m "Description of your changes"
+```
+
+8. **Push your changes**: Push your branch to your forked repository.
+
+```bash
+git push origin your-branch-name
+```
+
+9. **Submit a Pull Request (PR)**: Open a PR from your forked repository to the main branch of this repo.
+   > Important: Describe the changes you've made clearly!
+
+Our maintainers will review your PR, and once everything is good, your contributions will be merged!
+
+## Filing Bug Reports
+
+A good bug report is one a maintainer can act on. The single most useful thing you can include is a **minimal runnable reproduction**: a small single-file bot, or a test using `run_test()` from `pipecat.tests.utils`, that shows the bug.
+
+### What we require
+
+- A minimal reproducible example (runnable code, not just prose). If the bug truly can't be captured in code (for example, it only shows up on rare live calls), say so and include everything you have: logs, timestamps, session IDs, and your pipeline setup.
+- Confirmation that you reproduced the issue yourself on the latest Pipecat release (or `main`).
+
+### What gets your report looked at faster
+
+- A failing [behavioral eval](src/pipecat/evals/) scenario that demonstrates the bug.
+- An audio recording, when the bug is audible (interruptions, latency, garbled audio, wrong turn-taking).
+
+### AI-assisted reports
+
+Using AI tools to help write a report is fine. Submitting AI output you haven't verified is not. If you file a report:
+
+- You must have observed the behavior yourself.
+- You must be able to personally answer follow-up questions about it.
+
+Reports that appear machine-generated and unverified may be closed with a single request for justification. Repeat submissions of unverified reports may lead to being blocked from the repository.
+
+### Triage of incomplete reports
+
+Reports without a runnable reproduction get the `needs-repro` label and one comment asking for it. If no reproduction (or a clear explanation of why one isn't possible) is added within 30 days, the issue is closed automatically. Closed issues can always be reopened once a reproduction is available.
+
+If you respond on a `needs-repro` issue, any comment resets the 30-day clock. When a maintainer reviews your response and confirms it includes a runnable reproduction, they relabel the issue `repro-provided`, which takes it out of the auto-close pool and into the review queue. If what you added still isn't a runnable reproduction, the `needs-repro` label stays and the clock keeps running.
+
+## Changelog Entries
+
+Every pull request that makes a user-facing change should include a changelog entry. We use a changelog fragment system to avoid merge conflicts.
+
+A fix or follow-up to a change that has not shipped yet needs no entry of its own: the unreleased change's entry covers it — update that entry instead if the follow-up alters what it should say.
+
+### Creating a Changelog Fragment
+
+1. Create a new file in the `changelog/` directory with this naming pattern:
+
+   ```
+   <PR_number>.<type>.md
+   ```
+
+2. Choose the appropriate type:
+   - `added.md` - New features
+   - `changed.md` - Changes in existing functionality
+   - `deprecated.md` - Soon-to-be removed features
+   - `removed.md` - Removed features
+   - `fixed.md` - Bug fixes
+   - `performance.md` - Performance improvements
+   - `security.md` - Security fixes
+   - `other.md` - Other changes (documentation, dependencies, etc.)
+
+3. Write your changelog entry as a Markdown bullet point. Include the `-` at the start:
+
+**Example files:**
+
+`changelog/1234.added.md`:
+
+```markdown
+- Added support for Anthropic Claude 3.5 Sonnet with improved streaming performance.
+```
+
+`changelog/5678.fixed.md`:
+
+```markdown
+- Fixed an issue where audio frames were dropped during high-load scenarios.
+```
+
+**For entries with nested bullets:**
+
+`changelog/1234.changed.md`:
+
+```markdown
+- Updated service configuration:
+  - Changed default timeout to 30 seconds
+  - Added retry logic for failed connections
+```
+
+### Multiple Changes in One PR
+
+**Different types of changes:** Create separate fragment files for each type:
+
+```
+changelog/1234.added.md
+changelog/1234.fixed.md
+```
+
+**Multiple changes of the same type:** Create numbered fragment files:
+
+```
+changelog/1234.changed.md
+changelog/1234.changed.2.md
+```
+
+**Related changes:** Use nested bullets in a single fragment:
+
+```markdown
+- Updated service configuration:
+  - Changed default timeout to 30 seconds
+  - Added retry logic for failed connections
+```
+
+**Rule of thumb:** One logical change per fragment file. If changes are unrelated, use separate files.
+
+### Preview Your Changes
+
+To see what your changelog entry will look like:
+
+```bash
+towncrier build --draft --version Unreleased
+```
+
+This won't modify any files, just show you a preview.
+
+### When to Skip Changelog Entries
+
+You can skip adding a changelog entry for:
+
+- Documentation-only changes
+- Internal refactoring with no user-facing impact
+- Test-only changes
+- CI/build configuration changes
+
+If you're unsure whether your change needs a changelog entry, ask in your PR!
+
+## Dependency Management
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management. The `uv.lock` file is committed to ensure reproducible builds.
+
+### Adding or Updating Dependencies
+
+1. Edit `pyproject.toml` to add/update dependencies
+2. Run `uv lock` to update the lockfile with new dependency resolution
+3. Run `uv sync` to install the updated dependencies locally
+4. Always commit both files together:
+   ```bash
+   git add pyproject.toml uv.lock
+   git commit -m "feat: add new dependency for feature X"
+   ```
+
+**Important:** Never manually edit `uv.lock`. It's auto-generated by `uv lock`.
+
+## Code Style and Documentation
+
+### Python Code Style
+
+We use Ruff for code linting and formatting. Please ensure your code passes all linting checks before submitting a PR.
+
+### Docstring Conventions
+
+We follow Google-style docstrings with these specific conventions:
+
+**Regular Classes:**
+
+- Class docstring describes the class purpose and key functionality
+- `__init__` method has its own docstring with complete `Args:` section documenting all parameters
+- All public methods must have docstrings with `Args:` and `Returns:` sections as appropriate
+
+**Dataclasses:**
+
+- Class docstring describes the purpose and documents all fields in a `Parameters:` section
+- No `__init__` docstring (auto-generated)
+
+**Properties:**
+
+- Must have docstrings with `Returns:` section
+
+**Abstract Methods:**
+
+- Must have docstrings explaining what subclasses should implement
+
+**`__init__.py` Files:**
+
+- **Skip docstrings** for pure import/re-export modules
+- **Add brief docstrings** for top-level packages or those with initialization logic
+
+**Enums:**
+
+- Class docstring describes the enumeration purpose
+- Use `Parameters:` section to document each enum value and its meaning
+- No `__init__` docstring (Enums don't have custom constructors)
+
+**Code Examples in Docstrings:**
+
+- Use `Examples:` as a section header for multiple examples
+- Use descriptive text followed by double colons (`::`) for each example
+- **Always include a blank line after the `::"`**
+- Indent all code consistently within each block
+- Separate multiple examples with blank lines for readability
+
+**Lists and Bullets in Docstrings:**
+
+- Use dashes (`-`) for bullet points, not asterisks (`*`)
+- **Add a blank line before bullet lists** when they follow a colon
+- Use section headers like "Supported features:" or "Behavior:" before lists
+- For complex nested information, consider using paragraph format instead
+
+**Deprecations:**
+
+Always add a `.. deprecated::` directive to the docstring — it is the single
+source of truth that tooling parses into a deprecation registry, so it follows
+a small grammar (enforced by `tests/test_deprecation_markers.py`):
+
+- A version after `::` (e.g. `.. deprecated:: 1.3.0`).
+- A body that names the replacement with a Sphinx role — `:class:`, `:meth:`,
+  `:func:`, `:attr:`, `:mod:` (preferred, since the role encodes the target's
+  kind) — or a backticked name, or states `No replacement.` explicitly. Use a
+  plain backtick (not a role) when a role wouldn't resolve: aliases like
+  ``Service.Settings``, usage idioms like ``settings=...``, or parameters.
+- **The replacement is the first reference in the body**, so lead with the
+  relation clause — `Use :class:`X` instead.`, `Merged into :class:`X`.`,
+  `Moved to :mod:`X`.`. Any references after it are contextual prose, not
+  additional replacements, so you can freely mention related APIs:
+
+  ```
+  .. deprecated:: 1.3.0
+      Use :class:`~pipecat.workers.runner.WorkerRunner` instead. It now runs
+      workers (of which :class:`~pipecat.pipeline.worker.PipelineWorker` is one
+      kind), not just pipelines.
+  ```
+
+  Here the replacement is `WorkerRunner`; `PipelineWorker` is just context.
+- **Never lead with a contextual reference.** The first reference must be the
+  actual replacement — not the deprecated thing itself, a ``DeprecationWarning``,
+  or a related-but-not-replacement API. When nothing replaces it (a removed
+  parameter, a behavior change), lead with `No replacement.` rather than relying
+  on incidental words like "no longer".
+
+For the *runtime* warning, the mechanism depends on what is being deprecated:
+
+- **Classes, functions, methods, and properties** → the PEP 702 `@deprecated`
+  decorator (`from pipecat.utils.deprecation import deprecated`). It emits the
+  `DeprecationWarning` automatically and lets type checkers and IDEs flag usages
+  statically. (For a property, place `@deprecated` below `@property`, on the
+  getter.) Its message must be a string literal following the canonical
+  template:
+  - `` `Subject` is deprecated since X.Y.Z and will be removed in A.B.C. Use `Replacement` instead.``
+  - The removal version `A.B.C` is a concrete semantic version (e.g. `2.0.0`) —
+    commit to the release that removes it, don't write "a future release". With
+    nothing to migrate to, the second sentence is `No replacement.` — stated
+    explicitly.
+- **Parameters, module moves, behavior/value changes** → the decorator can't
+  mark these, so call `warnings.warn(..., DeprecationWarning)` by hand. These
+  don't get static-checker detection; the directive documents them.
+- **Fields whose reads are intercepted by `__getattribute__`** → call
+  `warn_deprecated_read()` (`from pipecat.utils.deprecation import
+  warn_deprecated_read`). Such a field is read wherever its object travels, so a
+  hand-rolled `warnings.warn` repeats itself on every read; the helper warns once
+  per call site, and reports the line that performed the read.
+
+```python
+from pipecat.utils.deprecation import deprecated
+
+
+@deprecated(
+    "`OldService` is deprecated since 1.3.0 and will be removed in 2.0.0. Use `NewService` instead."
+)
+class OldService(NewService):
+    """Deprecated alias for :class:`NewService`.
+
+    .. deprecated:: 1.3.0
+        Use :class:`NewService` instead. Will be removed in 2.0.0.
+    """
+```
+
+#### Examples:
+
+```python
+# Regular class
+class MyService(BaseService):
+    """Description of what the service does.
+
+    Provides detailed explanation of the service's functionality,
+    key features, and usage patterns.
+
+    Supported features:
+
+    - Feature one with detailed explanation
+    - Feature two with additional context
+    - Feature three for advanced use cases
+    """
+
+    def __init__(self, param1: str, old_param: str = None, **kwargs):
+        """Initialize the service.
+
+        Args:
+            param1: Description of param1.
+            old_param: Controls legacy behavior.
+
+                .. deprecated:: 1.2.0
+                    No replacement; this parameter no longer has any effect. Will
+                    be removed in 2.0.0.
+
+            **kwargs: Additional arguments passed to parent.
+        """
+        if old_param is not None:
+            import warnings
+
+            warnings.warn(
+                "`old_param` is deprecated since 1.2.0 and will be removed in 2.0.0. "
+                "No replacement.",
+                DeprecationWarning,
+            )
+        super().__init__(**kwargs)
+
+    @property
+    def sample_rate(self) -> int:
+        """Get the current sample rate.
+
+        Returns:
+            The sample rate in Hz.
+        """
+        return self._sample_rate
+
+    async def process_data(self, data: str) -> bool:
+        """Process the provided data.
+
+        Args:
+            data: The data to process.
+
+        Returns:
+            True if processing succeeded.
+        """
+        pass
+
+
+# Dataclass with code examples
+@dataclass
+class MessageFrame:
+    """Frame containing messages in OpenAI format.
+
+    Supports both simple and content list message formats.
+
+    Example::
+
+        [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"}
+        ]
+
+    Parameters:
+        messages: List of messages in OpenAI format.
+    """
+
+    messages: List[dict]
+
+
+# Enum class
+class Status(Enum):
+    """Status codes for processing operations.
+
+    Parameters:
+        PENDING: Operation is queued but not started.
+        RUNNING: Operation is currently in progress.
+        COMPLETED: Operation finished successfully.
+        FAILED: Operation encountered an error.
+    """
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+```
+
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, caste, color, religion, or sexual
+identity and orientation.
+
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment for our
+community include:
+
+- Demonstrating empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+- Focusing on what is best not just for us as individuals, but for the overall
+  community
+
+Examples of unacceptable behavior include:
+
+- The use of sexualized language or imagery, and sexual attention or advances of
+  any kind
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or email address,
+  without their explicit permission
+- Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+Community leaders have the right and responsibility to remove, edit, or reject
+comments, commits, code, wiki edits, issues, and other contributions that are
+not aligned to this Code of Conduct, and will communicate reasons for moderation
+decisions when appropriate.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+Examples of representing our community include using an official email address,
+posting via an official social media account, or acting as an appointed
+representative at an online or offline event.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at pipecat-ai@daily.co.
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Enforcement Guidelines
+
+Community leaders will follow these Community Impact Guidelines in determining
+the consequences for any action they deem in violation of this Code of Conduct:
+
+### 1. Correction
+
+**Community Impact**: Use of inappropriate language or other behavior deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from community leaders, providing
+clarity around the nature of the violation and an explanation of why the
+behavior was inappropriate. A public apology may be requested.
+
+### 2. Warning
+
+**Community Impact**: A violation through a single incident or series of
+actions.
+
+**Consequence**: A warning with consequences for continued behavior. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external channels
+like social media. Violating these terms may lead to a temporary or permanent
+ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including
+sustained inappropriate behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public or
+private interaction with the people involved, including unsolicited interaction
+with those enforcing the Code of Conduct, is allowed during this period.
+Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behavior, harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within the
+community.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+[https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
+
+Community Impact Guidelines were inspired by
+[Mozilla's code of conduct enforcement ladder][Mozilla CoC].
+
+For answers to common questions about this code of conduct, see the FAQ at
+[https://www.contributor-covenant.org/faq][FAQ]. Translations are available at
+[https://www.contributor-covenant.org/translations][translations].
+
+[homepage]: https://www.contributor-covenant.org
+[v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[Mozilla CoC]: https://github.com/mozilla/diversity
+[FAQ]: https://www.contributor-covenant.org/faq
+[translations]: https://www.contributor-covenant.org/translations

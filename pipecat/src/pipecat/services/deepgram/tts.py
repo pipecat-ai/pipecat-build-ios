@@ -1,0 +1,499 @@
+#
+# Copyright (c) 2024-2026, Daily
+#
+# SPDX-License-Identifier: BSD 2-Clause License
+#
+
+"""Deepgram text-to-speech service implementation.
+
+This module provides integration with Deepgram's text-to-speech API
+for generating speech from text using various voice models.
+"""
+
+import json
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass, field
+from typing import Any
+
+import aiohttp
+from loguru import logger
+from websockets.protocol import State
+
+from pipecat.frames.frames import (
+    ErrorFrame,
+    Frame,
+    TTSAudioRawFrame,
+    TTSStoppedFrame,
+)
+from pipecat.processors.frame_processor import FrameProcessorSetup
+from pipecat.services.settings import TTSSettings
+from pipecat.services.tts_service import TTSService, WebsocketTTSService
+from pipecat.utils.tracing.service_decorators import traced_tts
+from pipecat.utils.types import NOT_GIVEN, NotGiven
+
+
+@dataclass
+class DeepgramTTSSettings(TTSSettings):
+    """Settings for DeepgramTTSService and DeepgramHttpTTSService.
+
+    Parameters:
+        speed: Speech-rate multiplier, from 0.7 to 1.5. ``None`` leaves Aura at
+            its default rate. Supported by the Aura-2 English and Spanish
+            voices; Deepgram recommends staying at or above 0.9 for Spanish.
+    """
+
+    speed: float | None | NotGiven = field(default_factory=lambda: NOT_GIVEN)
+
+
+class DeepgramTTSService(WebsocketTTSService):
+    """Deepgram WebSocket-based text-to-speech service.
+
+    Provides real-time text-to-speech synthesis using Deepgram's WebSocket API.
+    Supports streaming audio generation with interruption handling via the Clear
+    message for conversational AI use cases.
+    """
+
+    Settings = DeepgramTTSSettings
+    _settings: Settings
+
+    SUPPORTED_ENCODINGS = ("linear16", "mulaw", "alaw")
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        voice: str | None = None,
+        base_url: str = "wss://api.deepgram.com",
+        sample_rate: int | None = None,
+        encoding: str = "linear16",
+        mip_opt_out: bool | None = None,
+        settings: Settings | None = None,
+        **kwargs,
+    ):
+        """Initialize the Deepgram WebSocket TTS service.
+
+        Args:
+            api_key: Deepgram API key for authentication.
+            voice: Voice model to use for synthesis.
+
+                .. deprecated:: 0.0.105
+                    Use ``settings=DeepgramTTSService.Settings(voice=...)`` instead.
+                    Will be removed in 2.0.0.
+
+            base_url: WebSocket base URL for Deepgram API. Defaults to "wss://api.deepgram.com".
+            sample_rate: Audio sample rate in Hz. If None, uses service default.
+            encoding: Audio encoding format. Defaults to "linear16". Must be one of SUPPORTED_ENCODINGS.
+            mip_opt_out: Opt out of the Deepgram Model Improvement Program. See
+                https://dpgr.am/deepgram-mip for pricing impacts before setting to True.
+            settings: Runtime-updatable settings. When provided alongside deprecated
+                parameters, ``settings`` values take precedence.
+            **kwargs: Additional arguments passed to parent InterruptibleTTSService class.
+
+        Raises:
+            ValueError: If encoding is not in SUPPORTED_ENCODINGS.
+        """
+        if encoding.lower() not in self.SUPPORTED_ENCODINGS:
+            raise ValueError(
+                f"Unsupported encoding '{encoding}'. Must be one of {', '.join(self.SUPPORTED_ENCODINGS)} for WebSocket TTS."
+            )
+
+        # 1. Initialize default_settings with hardcoded defaults
+        default_settings = self.Settings(
+            model=None,
+            voice="aura-2-helena-en",
+            language=None,
+            speed=None,
+        )
+
+        # 2. Apply direct init arg overrides (deprecated)
+        if voice is not None:
+            self._warn_init_param_moved_to_settings("voice", "voice")
+            default_settings.model = voice
+            default_settings.voice = voice
+
+        # 3. (No step 3, as there's no params object to apply)
+
+        # 4. Apply settings delta (canonical API, always wins)
+        if settings is not None:
+            default_settings.apply_update(settings)
+
+        super().__init__(
+            sample_rate=sample_rate,
+            pause_frame_processing=True,
+            push_stop_frames=False,
+            push_start_frame=True,
+            append_trailing_space=True,
+            settings=default_settings,
+            **kwargs,
+        )
+
+        self._api_key = api_key
+        self._base_url = base_url
+        self._encoding = encoding
+        self._mip_opt_out = mip_opt_out
+
+        self._receive_task = None
+
+    def can_generate_metrics(self) -> bool:
+        """Check if the service can generate metrics.
+
+        Returns:
+            True, as Deepgram WebSocket TTS service supports metrics generation.
+        """
+        return True
+
+    async def setup(self, setup: FrameProcessorSetup):
+        """Set up the service and connect.
+
+        Args:
+            setup: Configuration object containing setup parameters.
+        """
+        await super().setup(setup)
+        await self._connect()
+
+    async def _connect(self):
+        """Connect to Deepgram WebSocket and start receive task."""
+        await super()._connect()
+
+        await self._connect_websocket()
+
+        if self._websocket and not self._receive_task:
+            self._receive_task = self.create_task(self._receive_task_handler(self._report_error))
+
+    async def _disconnect(self):
+        """Disconnect from Deepgram WebSocket and clean up tasks."""
+        await super()._disconnect()
+
+        if self._receive_task:
+            await self.cancel_task(self._receive_task)
+            self._receive_task = None
+
+        await self._disconnect_websocket()
+
+    async def _update_settings(self, delta: TTSSettings) -> dict[str, Any]:
+        """Apply a settings delta.
+
+        Args:
+            delta: A :class:`TTSSettings` (or ``DeepgramTTSService.Settings``) delta.
+
+        Returns:
+            Dict mapping changed field names to their previous values.
+        """
+        changed = await super()._update_settings(delta)
+
+        # Deepgram uses voice as the model, so keep them in sync for metrics
+        if "voice" in changed:
+            self._settings.model = self._settings.voice
+            self._sync_model_name_to_metrics()
+
+        if changed:
+            await self._disconnect()
+            await self._connect()
+
+        return changed
+
+    async def _connect_websocket(self):
+        """Connect to Deepgram WebSocket API with configured settings."""
+        try:
+            if self._websocket and self._websocket.state is State.OPEN:
+                return
+
+            logger.debug("Connecting to Deepgram WebSocket")
+
+            # Build WebSocket URL with query parameters
+            params = []
+            params.append(f"model={self._settings.voice}")
+            params.append(f"encoding={self._encoding}")
+            params.append(f"sample_rate={self.sample_rate}")
+            if self._settings.speed is not None:
+                params.append(f"speed={self._settings.speed}")
+            if self._mip_opt_out is not None:
+                params.append(f"mip_opt_out={str(self._mip_opt_out).lower()}")
+
+            url = f"{self._base_url}/v1/speak?{'&'.join(params)}"
+
+            headers = {"Authorization": f"Token {self._api_key}"}
+
+            websocket = await self._websocket_connect(url, additional_headers=headers)
+            self._websocket = websocket
+
+            # `response` is populated after the handshake completes (which it
+            # has, since the connect call already returned).
+            response_headers = websocket.response.headers if websocket.response else {}
+            headers = {k: v for k, v in response_headers.items() if k.startswith("dg-")}
+            logger.debug(f'{self}: Websocket connection initialized: {{"headers": {headers}}}')
+
+            await self._call_event_handler("on_connected")
+        except Exception as e:
+            logger.error(f"{self} exception: {e}")
+            await self.push_error_frame(ErrorFrame(error=f"{self} error: {e}", exception=e))
+            self._websocket = None
+            await self._call_event_handler("on_connection_error", f"{e}")
+
+    async def _disconnect_websocket(self):
+        """Close WebSocket connection and reset state."""
+        try:
+            await self.stop_all_metrics()
+
+            if self._websocket:
+                logger.debug(f"{self}: Disconnecting from Deepgram WebSocket")
+                # Send Close message to gracefully close the connection
+                await self._websocket.send(json.dumps({"type": "Close"}))
+                await self._websocket.close()
+        except Exception as e:
+            logger.error(f"{self} exception: {e}")
+            await self.push_error_frame(ErrorFrame(error=f"{self} error: {e}"))
+        finally:
+            self._websocket = None
+            await self._call_event_handler("on_disconnected")
+
+    def _get_websocket(self):
+        """Get active websocket connection or raise exception."""
+        if self._websocket:
+            return self._websocket
+        raise Exception("Websocket not connected")
+
+    async def on_audio_context_interrupted(self, context_id: str):
+        """Send Clear message to Deepgram when an audio context is interrupted.
+
+        The Clear message will clear Deepgram's internal text buffer and stop
+        sending audio, allowing for a new response to be generated.
+
+        Args:
+            context_id: The ID of the audio context that was interrupted.
+        """
+        await self.stop_all_metrics()
+        if self._websocket:
+            try:
+                await self._websocket.send(json.dumps({"type": "Clear"}))
+            except Exception as e:
+                logger.error(f"{self} error sending Clear message: {e}")
+        await super().on_audio_context_interrupted(context_id)
+
+    async def _receive_messages(self):
+        """Receive and process messages from Deepgram WebSocket."""
+        async for message in self._get_websocket():
+            if isinstance(message, bytes):
+                # Binary message contains audio data
+                ctx_id = self.get_active_audio_context_id()
+                frame = TTSAudioRawFrame(message, self.sample_rate, 1, context_id=ctx_id)
+                await self.append_to_audio_context(ctx_id, frame)
+            elif isinstance(message, str):
+                # Text message contains metadata or control messages
+                try:
+                    msg = json.loads(message)
+                    msg_type = msg.get("type")
+
+                    if msg_type == "Metadata":
+                        logger.trace(f"Received metadata: {msg}")
+                    elif msg_type == "Flushed":
+                        logger.trace(f"Received Flushed: {msg}")
+                        ctx_id = self.get_active_audio_context_id()
+                        await self.append_to_audio_context(
+                            ctx_id, TTSStoppedFrame(context_id=ctx_id)
+                        )
+                        await self.remove_audio_context(ctx_id)
+                    elif msg_type == "Cleared":
+                        logger.trace(f"Received Cleared: {msg}")
+                        # Buffer has been cleared after interruption.
+                        # The on_audio_context_interrupted handler already cleaned up.
+                    elif msg_type == "Warning":
+                        logger.warning(
+                            f"{self} warning: {msg.get('description', 'Unknown warning')}"
+                        )
+                    else:
+                        logger.debug(f"Received unknown message type: {msg}")
+                except json.JSONDecodeError:
+                    logger.error(f"Invalid JSON message: {message}")
+
+    async def flush_audio(self, context_id: str | None = None):
+        """Flush any pending audio synthesis by sending Flush command.
+
+        This should be called when the LLM finishes a complete response to force
+        generation of audio from Deepgram's internal text buffer.
+        """
+        if self._websocket:
+            try:
+                flush_msg = {"type": "Flush"}
+                await self._websocket.send(json.dumps(flush_msg))
+            except Exception as e:
+                logger.error(f"{self} error sending Flush message: {e}")
+
+    @traced_tts
+    async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame | None, None]:
+        """Generate speech from text using Deepgram's WebSocket TTS API.
+
+        Args:
+            text: The text to synthesize into speech.
+            context_id: The context ID for tracking audio frames.
+
+        Yields:
+            Frame: Audio frames containing the synthesized speech, plus start/stop frames.
+        """
+        try:
+            # Reconnect if the websocket is closed
+            if not self._websocket or self._websocket.state is State.CLOSED:
+                await self._connect()
+
+            # Send text message to Deepgram
+            # Note: We don't send Flush here - that should only be sent when the
+            # LLM finishes a complete response via flush_audio()
+            speak_msg = {"type": "Speak", "text": text}
+            await self._get_websocket().send(json.dumps(speak_msg))
+
+            # The audio frames will be handled in _receive_messages
+            yield None
+
+        except Exception as e:
+            yield ErrorFrame(error=f"Unknown error occurred: {e}")
+
+
+class DeepgramHttpTTSService(TTSService):
+    """Deepgram HTTP text-to-speech service.
+
+    Provides text-to-speech synthesis using Deepgram's HTTP TTS API.
+    Supports various voice models and audio encoding formats with
+    configurable sample rates and quality settings.
+    """
+
+    Settings = DeepgramTTSSettings
+    _settings: Settings
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        voice: str | None = None,
+        aiohttp_session: aiohttp.ClientSession,
+        base_url: str = "https://api.deepgram.com",
+        sample_rate: int | None = None,
+        encoding: str = "linear16",
+        mip_opt_out: bool | None = None,
+        settings: Settings | None = None,
+        **kwargs,
+    ):
+        """Initialize the Deepgram TTS service.
+
+        Args:
+            api_key: Deepgram API key for authentication.
+            voice: Voice model to use for synthesis.
+
+                .. deprecated:: 0.0.105
+                    Use ``settings=DeepgramHttpTTSService.Settings(voice=...)`` instead.
+                    Will be removed in 2.0.0.
+
+            aiohttp_session: Shared aiohttp session for HTTP requests with connection pooling.
+            base_url: Custom base URL for Deepgram API. Defaults to "https://api.deepgram.com".
+            sample_rate: Audio sample rate in Hz. If None, uses service default.
+            encoding: Audio encoding format. Defaults to "linear16".
+            mip_opt_out: Opt out of the Deepgram Model Improvement Program. See
+                https://dpgr.am/deepgram-mip for pricing impacts before setting to True.
+            settings: Runtime-updatable settings. When provided alongside deprecated
+                parameters, ``settings`` values take precedence.
+            **kwargs: Additional arguments passed to parent TTSService class.
+        """
+        # 1. Initialize default_settings with hardcoded defaults
+        default_settings = self.Settings(
+            model=None,
+            voice="aura-2-helena-en",
+            language=None,
+            speed=None,
+        )
+
+        # 2. Apply direct init arg overrides (deprecated)
+        if voice is not None:
+            self._warn_init_param_moved_to_settings("voice", "voice")
+            default_settings.model = voice
+            default_settings.voice = voice
+
+        # 3. (No step 3, as there's no params object to apply)
+
+        # 4. Apply settings delta (canonical API, always wins)
+        if settings is not None:
+            default_settings.apply_update(settings)
+
+        super().__init__(
+            sample_rate=sample_rate,
+            push_start_frame=True,
+            push_stop_frames=True,
+            settings=default_settings,
+            **kwargs,
+        )
+
+        self._api_key = api_key
+        self._session = aiohttp_session
+        self._base_url = base_url
+        self._encoding = encoding
+        self._mip_opt_out = mip_opt_out
+
+    def can_generate_metrics(self) -> bool:
+        """Check if the service can generate metrics.
+
+        Returns:
+            True, as Deepgram TTS service supports metrics generation.
+        """
+        return True
+
+    @traced_tts
+    async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame | None, None]:
+        """Generate speech from text using Deepgram's TTS API.
+
+        Args:
+            text: The text to synthesize into speech.
+            context_id: The context ID for tracking audio frames.
+
+        Yields:
+            Frame: Audio frames containing the synthesized speech, plus start/stop frames.
+        """
+        # Build URL with parameters
+        url = f"{self._base_url}/v1/speak"
+
+        headers = {"Authorization": f"Token {self._api_key}", "Content-Type": "application/json"}
+
+        params = {
+            "model": self._settings.voice,
+            "encoding": self._encoding,
+            "sample_rate": self.sample_rate,
+            "container": "none",
+        }
+
+        if self._settings.speed is not None:
+            params["speed"] = self._settings.speed
+
+        if self._mip_opt_out is not None:
+            params["mip_opt_out"] = str(self._mip_opt_out).lower()
+
+        payload = {
+            "text": text,
+        }
+
+        try:
+            await self.start_ttfb_metrics()
+
+            async with self._session.post(
+                url, headers=headers, json=payload, params=params
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"HTTP {response.status}: {error_text}")
+
+                await self.start_tts_usage_metrics(text)
+
+                CHUNK_SIZE = self.chunk_size
+
+                first_chunk = True
+                async for chunk in response.content.iter_chunked(CHUNK_SIZE):
+                    if first_chunk:
+                        await self.stop_ttfb_metrics()
+                        first_chunk = False
+
+                    if chunk:
+                        yield TTSAudioRawFrame(
+                            audio=chunk,
+                            sample_rate=self.sample_rate,
+                            num_channels=1,
+                            context_id=context_id,
+                        )
+
+        except Exception as e:
+            yield ErrorFrame(f"Error getting audio: {str(e)}")

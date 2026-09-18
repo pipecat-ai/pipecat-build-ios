@@ -1,0 +1,424 @@
+#
+# Copyright (c) 2024-2026, Daily
+#
+# SPDX-License-Identifier: BSD 2-Clause License
+#
+
+"""Base websocket service with automatic reconnection and error handling."""
+
+import asyncio
+import time
+from abc import ABC, abstractmethod
+from typing import Protocol
+
+import websockets
+from loguru import logger
+from websockets.asyncio.client import ClientConnection
+from websockets.asyncio.client import connect as websocket_connect
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
+from websockets.protocol import State
+
+from pipecat.frames.frames import ErrorFrame
+from pipecat.utils.network import QuickFailureTracker, exponential_backoff_time
+
+
+class ReportErrorCallback(Protocol):
+    """Reports an error a websocket service ran into.
+
+    Implemented by the owning service, which usually pairs pushing the error
+    frame with a connection-error event of its own.
+    """
+
+    async def __call__(self, error: ErrorFrame, force_treat_as_permanent: bool = False) -> None:
+        """Report the error.
+
+        Args:
+            error: The error frame to report.
+            force_treat_as_permanent: Whether to treat the error as one that will
+                keep recurring, leaving the service unable to do any more
+                work. Leaving it False doesn't keep the service usable, since
+                the error's own category may cost it its usability.
+        """
+        ...
+
+
+# Default ceiling, in seconds, on the websocket closing handshake. Disconnect
+# runs while a service handles the EndFrame, before the frame continues
+# downstream, so an unacknowledged close delays pipeline shutdown by this much.
+# The websockets default of 10s is long enough to be noticeable once several
+# websocket services tear down in sequence.
+WS_CLOSE_TIMEOUT = 2.0
+
+
+class _BoundedCloseConnection(ClientConnection):
+    """Websocket connection that reports an unacknowledged closing handshake.
+
+    ``websockets`` enforces ``close_timeout`` internally and absorbs the outcome:
+    :meth:`close` returns normally whether the peer acknowledged the handshake or
+    the deadline expired and the connection was dropped. Timing the call is the
+    only way to tell those apart, which keeps a teardown that silently cost
+    ``close_timeout`` from going unnoticed.
+    """
+
+    async def close(self, code: int = 1000, reason: str = "") -> None:
+        """Close the connection, logging if the peer never acknowledged it.
+
+        Args:
+            code: WebSocket close code.
+            reason: WebSocket close reason.
+        """
+        start = time.monotonic()
+        try:
+            await super().close(code, reason)
+        finally:
+            elapsed = time.monotonic() - start
+            if self.close_timeout is not None and elapsed >= self.close_timeout:
+                # Immediately follows the owning service's "Disconnecting from
+                # ..." log, so the connection needs no further identification.
+                logger.debug(
+                    f"Peer did not acknowledge the websocket close within "
+                    f"{self.close_timeout}s; connection dropped"
+                )
+
+
+class WebsocketService(ABC):
+    """Base class for websocket-based services with automatic reconnection.
+
+    Provides websocket connection management, automatic reconnection with
+    exponential backoff, connection verification, and error handling.
+    Subclasses implement service-specific connection and message handling logic.
+
+    Reconnection gives up in two ways, both leaving the service unusable: the
+    provider rejects the configuration, which no amount of retrying will fix,
+    or the attempts are exhausted. Errors are reported through a
+    ``report_error`` callback, which takes the same optional
+    ``force_treat_as_permanent`` flag as
+    :meth:`~pipecat.processors.frame_processor.FrameProcessor.push_error_frame`,
+    so that giving up and saying so are the same act.
+    """
+
+    def __init__(
+        self,
+        *,
+        reconnect_backoff_min_wait: float = 4.0,
+        reconnect_backoff_max_wait: float = 10.0,
+        reconnect_on_error: bool = True,
+        ws_close_timeout: float = WS_CLOSE_TIMEOUT,
+        **kwargs,
+    ):
+        """Initialize the websocket service.
+
+        Args:
+            reconnect_backoff_min_wait: Minimum time, in seconds, to wait between
+                reconnection attempts.
+            reconnect_backoff_max_wait: Maximum time, in seconds, to wait between
+                reconnection attempts.
+            reconnect_on_error: Whether to automatically reconnect on connection errors.
+            ws_close_timeout: Maximum time, in seconds, to wait for the peer to
+                acknowledge the websocket closing handshake before dropping the
+                connection. Applied to connections opened through
+                :meth:`_websocket_connect`. Increase it for peers that need
+                longer to complete a graceful close.
+            **kwargs: Additional arguments (unused, for compatibility).
+        """
+        self._websocket: websockets.WebSocketClientProtocol | None = None  # pyright: ignore[reportAttributeAccessIssue]
+        self._reconnect_backoff_min_wait = reconnect_backoff_min_wait
+        self._reconnect_backoff_max_wait = reconnect_backoff_max_wait
+        self._reconnect_on_error = reconnect_on_error
+        self._ws_close_timeout = ws_close_timeout
+        self._reconnect_in_progress: bool = False
+        self._disconnecting: bool = False
+        # Rapid failure detection: when a server accepts the WebSocket handshake
+        # but immediately closes the connection (e.g. invalid API key, policy
+        # rejection), exponential backoff won't help because the handshake keeps
+        # succeeding. We detect this by tracking how long the connection
+        # survives after being established.
+        self._quick_failure_tracker = QuickFailureTracker()
+        self._last_connect_time: float = 0.0
+
+    @property
+    def _is_service_usable(self) -> bool:
+        """Whether the service this is mixed into can still be given work.
+
+        Always a
+        :class:`~pipecat.processors.frame_processor.FrameProcessor` in practice,
+        but this is a mixin and can't require it.
+        """
+        return getattr(self, "is_usable", True)
+
+    async def _websocket_connect(self, uri: str, **kwargs):
+        """Open a websocket connection with the service's close timeout applied.
+
+        Wraps :func:`websockets.asyncio.client.connect`, defaulting
+        ``close_timeout`` to ``ws_close_timeout``. Pass ``close_timeout``
+        explicitly to override it for a service whose peer needs different
+        closing behavior.
+
+        Args:
+            uri: The websocket URI to connect to.
+            **kwargs: Additional arguments passed to ``connect()``.
+
+        Returns:
+            The connected websocket.
+        """
+        kwargs.setdefault("close_timeout", self._ws_close_timeout)
+        kwargs.setdefault("create_connection", _BoundedCloseConnection)
+        return await websocket_connect(uri, **kwargs)
+
+    async def _verify_connection(self) -> bool:
+        """Verify the websocket connection is active and responsive.
+
+        Returns:
+            True if connection is verified working, False otherwise.
+        """
+        try:
+            if not self._websocket or self._websocket.state is State.CLOSED:
+                return False
+            await self._websocket.ping()
+            return True
+        except Exception as e:
+            logger.error(f"{self} connection verification failed: {e}")
+            return False
+
+    async def _reconnect_websocket(self, attempt_number: int) -> bool:
+        """Reconnect the websocket with the current attempt number.
+
+        Args:
+            attempt_number: Current retry attempt number for logging.
+
+        Returns:
+            True if reconnection and verification successful, False otherwise.
+        """
+        logger.warning(f"{self} reconnecting (attempt: {attempt_number})")
+        await self._disconnect_websocket()
+        await self._connect_websocket()
+        if not await self._verify_connection():
+            raise ConnectionError(f"{self} websocket reconnection failed verification")
+        return True
+
+    async def _try_reconnect(
+        self,
+        max_retries: int = 3,
+        report_error: ReportErrorCallback | None = None,
+    ) -> bool:
+        # Prevent concurrent reconnection attempts
+        if self._reconnect_in_progress:
+            logger.warning(f"{self} reconnect attempt aborted: already in progress")
+            return False
+
+        # Reconnecting can't fix whatever made the service unusable.
+        if not self._is_service_usable:
+            logger.error(f"{self} not reconnecting: the service is no longer usable")
+            return False
+
+        self._reconnect_in_progress = True
+        last_exception: Exception | None = None
+        try:
+            for attempt in range(1, max_retries + 1):
+                try:
+                    logger.warning(f"{self} reconnecting, attempt {attempt}")
+                    if await self._reconnect_websocket(attempt):
+                        logger.info(f"{self} reconnected successfully on attempt {attempt}")
+                        self._last_connect_time = time.monotonic()
+                        return True
+                except Exception as e:
+                    last_exception = e
+                    logger.error(f"{self} reconnection attempt {attempt} failed: {e}")
+                    if report_error:
+                        await report_error(
+                            ErrorFrame(
+                                f"{self} reconnection attempt {attempt} failed: {e}", exception=e
+                            )
+                        )
+                # A rejected attempt may have been rejected for a reason
+                # reporting it identified as terminal.
+                if not self._is_service_usable:
+                    logger.error(f"{self} abandoning reconnection: the service is no longer usable")
+                    return False
+                wait_time = exponential_backoff_time(
+                    attempt,
+                    min_wait=self._reconnect_backoff_min_wait,
+                    max_wait=self._reconnect_backoff_max_wait,
+                )
+                await asyncio.sleep(wait_time)
+            msg = f"{self} failed to reconnect after {max_retries} attempts"
+            if last_exception:
+                msg += f": {last_exception}"
+            logger.error(msg)
+            if report_error:
+                await report_error(
+                    ErrorFrame(msg, exception=last_exception), force_treat_as_permanent=True
+                )
+            return False
+        finally:
+            self._reconnect_in_progress = False
+
+    async def send_with_retry(self, message, report_error: ReportErrorCallback):
+        """Attempt to send a message, retrying after reconnect if necessary."""
+        try:
+            # If websocket isn't connected/present, treat as a send failure —
+            # the broad `except Exception` below will trigger a reconnect
+            # attempt.
+            if self._websocket is None:
+                raise ConnectionError(f"{self} no websocket connected")
+            await self._websocket.send(message)
+        except Exception as e:
+            logger.error(f"{self} send failed: {e}, will try to reconnect")
+            # Try to reconnect before retrying
+            success = await self._try_reconnect(report_error=report_error)
+            if success and self._websocket is not None:
+                logger.info(f"{self} reconnected successfully, will retry send the message")
+                # trying to send the message one more time
+                await self._websocket.send(message)
+            else:
+                logger.error(f"{self} send failed; unable to reconnect")
+
+    async def _maybe_try_reconnect(
+        self,
+        error_message: str,
+        report_error: ReportErrorCallback,
+        error: Exception | None = None,
+    ) -> bool:
+        """Check if reconnection should be attempted and try if appropriate.
+
+        Args:
+            error_message: Human-readable error message for logging.
+            report_error: Callback function to report connection errors.
+            error: The exception that occurred (optional, may be None for graceful closes).
+
+        Returns:
+            True if should continue the receive loop, False if should break.
+        """
+        # Don't reconnect if we're intentionally disconnecting
+        if self._disconnecting:
+            if error:
+                logger.warning(f"{self} error during disconnect: {error}")
+            else:
+                logger.debug(f"{self} receive loop ended during disconnect")
+            return False
+
+        # Check if the connection died too quickly after being established. This
+        # catches cases where the handshake succeeds but the server immediately
+        # closes (e.g. invalid API key). Exponential backoff won't help here
+        # because the handshake keeps succeeding — we need to stop the loop.
+        if self._last_connect_time > 0:
+            connection_duration = time.monotonic() - self._last_connect_time
+            result = self._quick_failure_tracker.record(connection_duration)
+            if result.is_quick_failure:
+                logger.warning(
+                    f"{self} connection lasted only {connection_duration:.1f}s "
+                    f"({self._quick_failure_tracker.count}/"
+                    f"{self._quick_failure_tracker.max_consecutive_failures} "
+                    f"consecutive quick failures)"
+                )
+            if result.should_give_up:
+                msg = (
+                    f"{self} connection failed "
+                    f"{self._quick_failure_tracker.max_consecutive_failures} "
+                    f"times immediately after connecting"
+                )
+                logger.error(msg)
+                await report_error(ErrorFrame(msg), force_treat_as_permanent=True)
+                return False
+
+        # Log the message
+        logger.warning(error_message)
+
+        # Try to reconnect if enabled
+        if self._reconnect_on_error:
+            success = await self._try_reconnect(report_error=report_error)
+            return success
+        else:
+            # `reconnect_on_error` governs this loop only: services that turn it
+            # off reconnect on demand in `send_with_retry` instead. Reporting
+            # the drop as terminal would close that path too.
+            await report_error(ErrorFrame(error_message, exception=error))
+            return False
+
+    async def _receive_task_handler(self, report_error: ReportErrorCallback):
+        """Handle websocket message receiving with automatic retry logic.
+
+        Continuously receives messages with automatic reconnection on errors.
+        Uses exponential backoff between retry attempts and reports fatal errors
+        after maximum retries are exhausted.
+
+        Args:
+            report_error: Callback function to report connection errors.
+        """
+        while True:
+            self._last_connect_time = time.monotonic()
+            try:
+                await self._receive_messages()
+                # _receive_messages() returned normally. This happens when the websocket
+                # closes gracefully (server sent close frame). The async for loop over
+                # the websocket exits without raising an exception in this case.
+                # We must handle this to avoid an infinite loop.
+                message = f"{self} connection closed by server"
+                should_continue = await self._maybe_try_reconnect(message, report_error)
+                if not should_continue:
+                    break
+            except ConnectionClosedOK as e:
+                # Normal closure, don't retry
+                logger.debug(f"{self} connection closed normally: {e}")
+                break
+            except ConnectionClosedError as e:
+                # Connection closed with error (e.g., no close frame received/sent)
+                # This often indicates network issues, server problems, or abrupt disconnection
+                message = f"{self} connection closed, but with an error: {e}"
+                should_continue = await self._maybe_try_reconnect(message, report_error, e)
+                if not should_continue:
+                    break
+            except Exception as e:
+                # General error during message receiving
+                message = f"{self} error receiving messages: {e}"
+                should_continue = await self._maybe_try_reconnect(message, report_error, e)
+                if not should_continue:
+                    break
+
+    async def _connect(self):
+        """Connect to the service and reset disconnecting flag.
+
+        Manages the disconnecting flag to enable reconnection. Subclasses should
+        call super()._connect() first, then implement their specific connection
+        logic including websocket connection via _connect_websocket() and any
+        additional setup required.
+        """
+        self._disconnecting = False
+        self._quick_failure_tracker.reset()
+
+    async def _disconnect(self):
+        """Disconnect from the service and set disconnecting flag.
+
+        Manages the disconnecting flag to prevent reconnection during intentional
+        disconnect. Subclasses should call super()._disconnect() first, then
+        implement their specific disconnection logic including websocket
+        disconnection via _disconnect_websocket() and any cleanup required.
+        """
+        self._disconnecting = True
+
+    @abstractmethod
+    async def _connect_websocket(self):
+        """Establish the websocket connection.
+
+        Implement the low-level websocket connection logic specific to the service.
+        Should only handle websocket connection, not additional service setup.
+        """
+        pass
+
+    @abstractmethod
+    async def _disconnect_websocket(self):
+        """Close the websocket connection.
+
+        Implement the low-level websocket disconnection logic specific to the service.
+        Should only handle websocket disconnection, not additional service cleanup.
+        """
+        pass
+
+    @abstractmethod
+    async def _receive_messages(self):
+        """Receive and process websocket messages.
+
+        Implement service-specific logic for receiving and handling messages
+        from the websocket connection. Called continuously by the receive task handler.
+        """
+        pass

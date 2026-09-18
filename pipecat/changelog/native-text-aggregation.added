@@ -1,0 +1,3 @@
+Allow SimpleTextAggregator to use a host-provided sentence boundary matcher and
+an optional buffer length limit. Preserve frame metadata through LLMTextProcessor
+aggregation and flushing so native hosts can correlate text with its source turn.
